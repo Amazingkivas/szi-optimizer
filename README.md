@@ -1,16 +1,177 @@
-# React + Vite
+# SZI Optimizer
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Веб-приложение для решения задачи внедрения СЗИ для групп информационных активов с нечёткими параметрами по постановке из `szi.txt`.
 
-Currently, two official plugins are available:
+## Что реализовано
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- компактный горизонтальный интерфейс с табличным вводом, где каждое значение вводится в отдельную ячейку;
+- ввод треугольных нечётких чисел `c̃j` и `d̃j` тройками `(a, b, c)`;
+- минимум три способа задания `λ`: ползунок, числовое поле и кнопки-пресеты;
+- минимум три метода дефаззификации на выбор;
+- автоматическая сортировка по невозрастанию `d` после дефаззификации;
+- вывод только итогового результата: чёткие `c`, `d`, оптимальный вектор `x*`, значения `F1`, `F2`, `F`;
+- вычислительная часть полностью перенесена на Python;
+- для решения подзадач используется библиотечный MILP-решатель `scipy.optimize.milp`, без собственной реализации алгоритмов оптимизации;
+- есть launcher, который поднимает локальный сервер и открывает приложение в браузере автоматически;
+- добавлен скрипт упаковки нативного исполняемого файла через PyInstaller.
 
-## React Compiler
+## Стек
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Frontend
+- React 19
+- Vite
 
-## Expanding the ESLint configuration
+### Backend / вычисления
+- Python 3.11+
+- Flask
+- NumPy
+- SciPy (`milp`)
+- Waitress
+- PyInstaller — для сборки исполняемого файла
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Структура проекта
+
+- `src/` — пользовательский интерфейс React;
+- `backend/solver.py` — дефаззификация и решение задачи;
+- `server.py` — HTTP API и раздача собранного фронтенда;
+- `launcher.py` — локальный запуск с автоматическим открытием браузера;
+- `scripts/build_executable.py` — упаковка в исполняемый файл;
+- `report_implementation.tex` — отчёт по реализации в формате LaTeX.
+
+## Подробная инструкция по запуску
+
+### 1. Установить Node.js и Python
+
+Нужно установить:
+- Node.js 20+;
+- Python 3.11+.
+
+Проверьте версии:
+
+```bash
+node --version
+python --version
+```
+
+### 2. Установить frontend-зависимости
+
+```bash
+npm install
+```
+
+### 3. Установить Python-зависимости
+
+Рекомендуется использовать виртуальное окружение.
+
+#### Linux / macOS
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+#### Windows PowerShell
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+### 4. Собрать фронтенд
+
+```bash
+npm run build
+```
+
+После этого появится папка `dist/`, которую Python-сервер будет отдавать в браузер.
+
+### 5. Запустить приложение
+
+#### Вариант A. Обычный запуск через Python
+
+```bash
+python launcher.py
+```
+
+Что произойдёт:
+1. поднимется локальный HTTP-сервер на `http://127.0.0.1:8000`;
+2. приложение автоматически откроется в браузере;
+3. вычисления будут выполняться на Python-сервере.
+
+#### Вариант B. Раздельный запуск для разработки
+
+В одном терминале:
+
+```bash
+python server.py
+```
+
+Во втором терминале:
+
+```bash
+npm run dev
+```
+
+В режиме разработки Vite проксирует запросы `/api/*` на Python-сервер.
+
+## Инструкция по работе в интерфейсе
+
+1. Укажите число ГИА `m` и число СЗИ `n`.
+2. Заполните таблицу нечётких параметров `c̃j = (a, b, c)`.
+3. Заполните таблицу нечётких параметров `d̃j = (a, b, c)`.
+4. Заполните матрицу стоимостей `A` и вектор бюджетов `b`.
+5. Выберите метод дефаззификации.
+6. Задайте `λ` одним из трёх способов:
+   - ползунком;
+   - точным числом;
+   - кнопкой-пресетом.
+7. Нажмите **«Рассчитать оптимальное решение»**.
+8. Справа появятся:
+   - чёткие значения `c` и `d` после дефаззификации;
+   - порядок сортировки по `d`;
+   - оптимальный вектор `x*`;
+   - значения `F1(x*)`, `F2(x*)`, `F(x*)`.
+
+## Методы дефаззификации
+
+В приложении доступны следующие методы:
+
+1. **Центроид**: `(a + b + c) / 3`
+2. **Индекс Ягера**: `(a + 2b + c) / 4`
+3. **Интегральное среднее**: `(a + 4b + c) / 6`
+4. **Мода**: `b`
+
+## Как строится решение
+
+1. Нечёткие параметры `c̃j`, `d̃j` переводятся в чёткие значения по выбранному методу.
+2. Проверяется условие корректности `d_j <= c_j`.
+3. СЗИ сортируются по невозрастанию `d_j`.
+4. Далее запускается алгоритм из постановки, а каждая вспомогательная аддитивная задача решается библиотечным MILP-решателем из SciPy.
+5. Пользователю выводится только оптимальный итоговый результат без промежуточных шагов.
+
+## Сборка исполняемого файла
+
+После установки зависимостей и сборки фронтенда выполните:
+
+```bash
+python scripts/build_executable.py
+```
+
+Результат сборки появится в папке:
+
+- `dist/` или `build/` PyInstaller, в зависимости от платформы;
+- исполняемый файл будет называться `szi-optimizer` или `szi-optimizer.exe`.
+
+> Важно: PyInstaller собирает исполняемый файл под текущую ОС. Для `szi-optimizer.exe` нужно запускать сборку на Windows.
+
+## Быстрая проверка примером
+
+Используйте кнопку **«Загрузить пример»**, затем нажмите **«Рассчитать оптимальное решение»**.
+
+## Ограничения
+
+- для сборки Windows `.exe` нужна Windows-среда;
+- без папки `dist/` launcher не стартует, потому что ему нечего открывать;
+- сервер ожидает корректные треугольные нечёткие числа: `a <= b <= c`.

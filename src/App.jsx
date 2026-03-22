@@ -1,316 +1,524 @@
-import { useState, useCallback } from "react";
-
-// ─── Utilities ────────────────────────────────────────────────────────────────
-
-function isFeasible(x, A, b) {
-  for (let i = 0; i < A.length; i++) {
-    let sum = 0;
-    for (let j = 0; j < x.length; j++) sum += A[i][j] * x[j];
-    if (sum > b[i] + 1e-9) return false;
-  }
-  return true;
-}
-
-function addObj(x, weights) {
-  return x.reduce((s, v, j) => s + v * weights[j], 0);
-}
-
-function maxminObj(x, d) {
-  let mn = Infinity, any = false;
-  for (let j = 0; j < x.length; j++) {
-    if (x[j] === 1) { mn = Math.min(mn, d[j]); any = true; }
-  }
-  return any ? mn : 0;
-}
-
-function combined(x, c, d, lambda) {
-  return lambda * addObj(x, c) + (1 - lambda) * maxminObj(x, d);
-}
-
-function solveKnapsackAdditive(n, A, b, weights) {
-  if (n === 0) return [];
-  let bestVal = -Infinity, bestX = new Array(n).fill(0);
-  if (n <= 20) {
-    for (let mask = 0; mask < (1 << n); mask++) {
-      const x = Array.from({ length: n }, (_, j) => (mask >> j) & 1);
-      if (!isFeasible(x, A, b)) continue;
-      const val = addObj(x, weights);
-      if (val > bestVal) { bestVal = val; bestX = [...x]; }
-    }
-  } else {
-    const items = Array.from({ length: n }, (_, j) => ({ j, w: weights[j] }))
-      .filter(it => it.w > 0).sort((a, b) => b.w - a.w);
-    const x = new Array(n).fill(0);
-    for (const { j } of items) { x[j] = 1; if (!isFeasible(x, A, b)) x[j] = 0; }
-    bestX = x;
-  }
-  return bestX;
-}
-
-// ─── Main Algorithm ───────────────────────────────────────────────────────────
-
-function runAlgorithm(c, d, A, b, lambda) {
-  const n = c.length;
-  const steps = [];
-
-  const x0 = solveKnapsackAdditive(n, A, b, c);
-  const V = [x0];
-  steps.push({
-    s: 0, label: "Полная задача (критерий F\u2081)",
-    x: [...x0], size: `${A.length}\u00d7${n}`,
-    F1: addObj(x0, c), F2: maxminObj(x0, d), F: combined(x0, c, d, lambda),
-  });
-
-  if (lambda === 1) return { best: x0, V, steps, bestF: combined(x0, c, d, lambda), bestIdx: 0 };
-
-  let j0 = -1;
-  for (let j = n - 1; j >= 0; j--) { if (x0[j] === 1) { j0 = j; break; } }
-  if (j0 <= 0) return { best: x0, V, steps, bestF: combined(x0, c, d, lambda), bestIdx: 0 };
-
-  for (let s = 1; s <= j0; s++) {
-    const sz = j0 + 1 - s;
-    const As = A.map(row => row.slice(0, sz));
-    const ws = c.slice(0, sz).map((cv, j) =>
-      j < sz - 1 ? lambda * cv : lambda * cv + (1 - lambda) * d[sz - 1]
-    );
-    const xsSmall = solveKnapsackAdditive(sz, As, b, ws);
-    const xs = [...xsSmall, ...new Array(n - sz).fill(0)];
-    V.push(xs);
-    steps.push({
-      s, label: `s=${s}, \u0440\u0430\u0441\u0441\u043c\u0430\u0442\u0440\u0438\u0432\u0430\u0435\u043c \u043f\u0435\u0440\u0432\u044b\u0435 ${sz} \u0421\u0417\u0418`,
-      x: [...xs], size: `${A.length}\u00d7${sz}`,
-      F1: addObj(xs, c), F2: maxminObj(xs, d), F: combined(xs, c, d, lambda),
-    });
-  }
-
-  let bestIdx = 0, bestF = -Infinity;
-  V.forEach((xv, i) => { const fv = combined(xv, c, d, lambda); if (fv > bestF) { bestF = fv; bestIdx = i; } });
-  return { best: V[bestIdx], V, steps, bestF, bestIdx };
-}
-
-const parseRow = (s) => s.trim().split(/[\s,;]+/).map(Number).filter(v => !isNaN(v));
+import { useEffect, useMemo, useState } from 'react'
+import './App.css'
 
 const EXAMPLE = {
-  m: 3, n: 5, lambda: "0.5",
-  c: ["90", "76", "30", "35", "30"],
-  d: ["40", "20", "14", "12", "10"],
-  A: ["15 10 5 4 3", "27 18 12 6 6", "40 25 12 11 8"],
-  b: "20 39 48",
-};
+  assets: 3,
+  protections: 5,
+  lambda: 0.5,
+  defuzzMethod: 'centroid',
+  cFuzzy: [
+    ['80', '90', '100'],
+    ['70', '76', '82'],
+    ['24', '30', '36'],
+    ['30', '35', '41'],
+    ['26', '30', '34'],
+  ],
+  dFuzzy: [
+    ['30', '40', '50'],
+    ['15', '20', '25'],
+    ['10', '14', '18'],
+    ['8', '12', '16'],
+    ['6', '10', '14'],
+  ],
+  costs: [
+    ['15', '10', '5', '4', '3'],
+    ['27', '18', '12', '6', '6'],
+    ['40', '25', '12', '11', '8'],
+  ],
+  budgets: ['20', '39', '48'],
+}
 
-export default function App() {
-  const [m, setM] = useState(EXAMPLE.m);
-  const [n, setN] = useState(EXAMPLE.n);
-  const [lambda, setLambda] = useState(EXAMPLE.lambda);
-  const [cVals, setCVals] = useState(EXAMPLE.c);
-  const [dVals, setDVals] = useState(EXAMPLE.d);
-  const [Arows, setArows] = useState(EXAMPLE.A);
-  const [bVec, setBVec] = useState(EXAMPLE.b);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState("params");
+const lambdaPresets = [0, 0.25, 0.5, 0.75, 1]
 
-  const updateDimensions = (newM, newN) => {
-    setCVals(prev => { const a=[...prev]; while(a.length<newN) a.push("0"); return a.slice(0,newN); });
-    setDVals(prev => { const a=[...prev]; while(a.length<newN) a.push("0"); return a.slice(0,newN); });
-    setArows(prev => { const a=[...prev]; while(a.length<newM) a.push(""); return a.slice(0,newM); });
-  };
+const createMatrix = (rows, columns, fill = '') =>
+  Array.from({ length: rows }, () => Array.from({ length: columns }, () => fill))
 
-  const handleRun = useCallback(() => {
+function normalizeTriangularRow(row) {
+  return row.map((value) => (value === '' ? '' : String(value)))
+}
+
+function createExampleState() {
+  return {
+    assets: EXAMPLE.assets,
+    protections: EXAMPLE.protections,
+    lambda: EXAMPLE.lambda,
+    defuzzMethod: EXAMPLE.defuzzMethod,
+    cFuzzy: EXAMPLE.cFuzzy.map(normalizeTriangularRow),
+    dFuzzy: EXAMPLE.dFuzzy.map(normalizeTriangularRow),
+    costs: EXAMPLE.costs.map((row) => [...row]),
+    budgets: [...EXAMPLE.budgets],
+  }
+}
+
+function resizeTriangular(matrix, rows) {
+  const next = matrix.map((row) => [...row])
+  while (next.length < rows) next.push(['', '', ''])
+  return next.slice(0, rows)
+}
+
+function resizeCosts(matrix, rows, columns) {
+  const next = matrix.map((row) => [...row])
+  while (next.length < rows) next.push(Array.from({ length: columns }, () => ''))
+  return next.slice(0, rows).map((row) => {
+    const normalized = [...row]
+    while (normalized.length < columns) normalized.push('')
+    return normalized.slice(0, columns)
+  })
+}
+
+function resizeVector(vector, size) {
+  const next = [...vector]
+  while (next.length < size) next.push('')
+  return next.slice(0, size)
+}
+
+function parseNumber(value, label) {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Поле «${label}» заполнено некорректно.`)
+  }
+  return parsed
+}
+
+function App() {
+  const initial = useMemo(createExampleState, [])
+  const [assets, setAssets] = useState(initial.assets)
+  const [protections, setProtections] = useState(initial.protections)
+  const [lambdaValue, setLambdaValue] = useState(initial.lambda)
+  const [defuzzMethod, setDefuzzMethod] = useState(initial.defuzzMethod)
+  const [cFuzzy, setCFuzzy] = useState(initial.cFuzzy)
+  const [dFuzzy, setDFuzzy] = useState(initial.dFuzzy)
+  const [costs, setCosts] = useState(initial.costs)
+  const [budgets, setBudgets] = useState(initial.budgets)
+  const [defuzzOptions, setDefuzzOptions] = useState([])
+  const [result, setResult] = useState(null)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/meta')
+      .then((response) => response.json())
+      .then((data) => setDefuzzOptions(data.defuzz_methods ?? []))
+      .catch(() => {
+        setDefuzzOptions([
+          { value: 'centroid', label: 'Центроид: (a + b + c) / 3' },
+          { value: 'yager', label: 'Индекс Ягера: (a + 2b + c) / 4' },
+          { value: 'graded_mean', label: 'Интегральное среднее: (a + 4b + c) / 6' },
+          { value: 'mode', label: 'Мода: b' },
+        ])
+      })
+  }, [])
+
+  useEffect(() => {
+    setCFuzzy((current) => resizeTriangular(current, protections))
+    setDFuzzy((current) => resizeTriangular(current, protections))
+    setCosts((current) => resizeCosts(current, assets, protections))
+    setBudgets((current) => resizeVector(current, assets))
+    setResult(null)
+  }, [assets, protections])
+
+  const lambdaPercent = Math.round(lambdaValue * 100)
+
+  const updateTriangularCell = (setter, matrix, rowIndex, colIndex, value) => {
+    const next = matrix.map((row) => [...row])
+    next[rowIndex][colIndex] = value
+    setter(next)
+  }
+
+  const updateCostCell = (rowIndex, colIndex, value) => {
+    const next = costs.map((row) => [...row])
+    next[rowIndex][colIndex] = value
+    setCosts(next)
+  }
+
+  const setExample = () => {
+    const exampleState = createExampleState()
+    setAssets(exampleState.assets)
+    setProtections(exampleState.protections)
+    setLambdaValue(exampleState.lambda)
+    setDefuzzMethod(exampleState.defuzzMethod)
+    setCFuzzy(exampleState.cFuzzy)
+    setDFuzzy(exampleState.dFuzzy)
+    setCosts(exampleState.costs)
+    setBudgets(exampleState.budgets)
+    setResult(null)
+    setError('')
+  }
+
+  const clearAll = () => {
+    setResult(null)
+    setError('')
+    setCFuzzy(createMatrix(protections, 3))
+    setDFuzzy(createMatrix(protections, 3))
+    setCosts(createMatrix(assets, protections))
+    setBudgets(Array.from({ length: assets }, () => ''))
+  }
+
+  const handleSolve = async () => {
     try {
-      setError("");
-      const lam = parseFloat(lambda);
-      if (isNaN(lam) || lam < 0 || lam > 1) throw new Error("λ должно быть в [0,1]");
-      const c = cVals.slice(0,n).map((v,j)=>{ const x=parseFloat(v); if(isNaN(x)) throw new Error(`c: некорректное значение для СЗИ ${j+1}`); return x; });
-      const d = dVals.slice(0,n).map((v,j)=>{ const x=parseFloat(v); if(isNaN(x)) throw new Error(`d: некорректное значение для СЗИ ${j+1}`); return x; });
-      const idx = Array.from({length:n},(_,i)=>i).sort((a,b)=>d[b]-d[a]);
-      const cs = idx.map(i=>c[i]);
-      const ds = idx.map(i=>d[i]);
-      const A = Arows.slice(0,m).map((row,i)=>{ const vals=parseRow(row); if(vals.length<n) throw new Error(`Строка ${i+1} матрицы A должна содержать ${n} значений`); return idx.map(i=>vals[i]); });
-      const b = parseRow(bVec);
-      if(b.length<m) throw new Error(`Вектор b должен содержать ${m} значений`);
-      const res = runAlgorithm(cs, ds, A, b, lam);
-      res.c = cs; res.d = ds;
-      setResult(res);
-      setActiveTab("result");
-    } catch(e) { setError(e.message); }
-  }, [m, n, lambda, cVals, dVals, Arows, bVec]);
+      setLoading(true)
+      setError('')
+      setResult(null)
 
-  const fmt = v => isFinite(v) ? v.toFixed(3) : "—";
+      const payload = {
+        lambda: lambdaValue,
+        defuzz_method: defuzzMethod,
+        c_fuzzy: cFuzzy.map((row, index) => row.map((value, col) => parseNumber(value, `c̃${index + 1}[${col + 1}]`))),
+        d_fuzzy: dFuzzy.map((row, index) => row.map((value, col) => parseNumber(value, `d̃${index + 1}[${col + 1}]`))),
+        cost_matrix: costs.map((row, rowIndex) => row.map((value, columnIndex) => parseNumber(value, `A[${rowIndex + 1}, ${columnIndex + 1}]`))),
+        budgets: budgets.map((value, index) => parseNumber(value, `b${index + 1}`)),
+      }
+
+      const response = await fetch('/api/solve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Сервер не смог решить задачу.')
+      }
+      setResult(data)
+    } catch (solveError) {
+      setError(solveError.message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
-    <div style={{ minHeight:"100vh", background:"#020b18", color:"#e2e8f0", fontFamily:"'IBM Plex Mono','Courier New',monospace", padding:"24px" }}>
+    <div className="page-shell">
+      <header className="hero-panel">
+        <div>
+          <span className="eyebrow">Система выбора СЗИ</span>
+          <h1>Лаконичный интерфейс для нечёткой задачи внедрения СЗИ</h1>
+          <p>
+            Вводите все параметры по ячейкам, выбирайте метод дефаззификации, задавайте λ тремя способами
+            и сразу получайте только оптимальное решение.
+          </p>
+        </div>
+        <div className="hero-actions">
+          <button type="button" className="secondary-button" onClick={setExample}>
+            Загрузить пример
+          </button>
+          <button type="button" className="ghost-button" onClick={clearAll}>
+            Очистить форму
+          </button>
+        </div>
+      </header>
 
-      <div style={{ marginBottom:28 }}>
-        <h1 style={{ fontSize:22, fontWeight:700, margin:0, color:"#f0f9ff" }}>Задача внедрения СЗИ</h1>
-        <div style={{ marginTop:12, display:"flex", gap:8, flexWrap:"wrap" }}>
-          {["params","result"].map(tab=>(
-            <button key={tab} onClick={()=>setActiveTab(tab)} style={{
-              background:activeTab===tab?"#0ea5e9":"transparent",
-              color:activeTab===tab?"#fff":"#64748b",
-              border:`1px solid ${activeTab===tab?"#0ea5e9":"#1e3a5f"}`,
-              padding:"5px 14px", borderRadius:4, cursor:"pointer",
-              fontSize:12, letterSpacing:1, fontFamily:"monospace",
-            }}>
-              {tab==="params" ? "⚙ ПАРАМЕТРЫ" : "◉ РЕЗУЛЬТАТ"}
+      <main className="workspace-grid">
+        <section className="panel panel--wide">
+          <div className="panel-header">
+            <div>
+              <h2>Настройка задачи</h2>
+              <p>Горизонтальная компоновка подготовлена для комфортного ввода матриц и нечётких чисел.</p>
+            </div>
+          </div>
+
+          <div className="control-grid">
+            <label className="field-card">
+              <span>Число ГИА, m</span>
+              <input
+                type="number"
+                min="1"
+                value={assets}
+                onChange={(event) => setAssets(Math.max(1, Number(event.target.value) || 1))}
+              />
+            </label>
+            <label className="field-card">
+              <span>Число СЗИ, n</span>
+              <input
+                type="number"
+                min="1"
+                value={protections}
+                onChange={(event) => setProtections(Math.max(1, Number(event.target.value) || 1))}
+              />
+            </label>
+            <label className="field-card field-card--select">
+              <span>Метод дефаззификации</span>
+              <select value={defuzzMethod} onChange={(event) => setDefuzzMethod(event.target.value)}>
+                {defuzzOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="lambda-panel">
+            <div>
+              <h3>Параметр λ</h3>
+              <p>Доступны три способа задания: ползунок, точное число и готовые пресеты.</p>
+            </div>
+            <div className="lambda-controls">
+              <label className="slider-card">
+                <span>Ползунок λ</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={lambdaValue}
+                  onChange={(event) => setLambdaValue(Number(event.target.value))}
+                />
+              </label>
+              <label className="field-card field-card--compact">
+                <span>Точное значение</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={lambdaValue}
+                  onChange={(event) => setLambdaValue(Math.min(1, Math.max(0, Number(event.target.value) || 0)))}
+                />
+              </label>
+              <div className="preset-card">
+                <span>Быстрые варианты</span>
+                <div className="preset-list">
+                  {lambdaPresets.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      className={preset === lambdaValue ? 'preset-button preset-button--active' : 'preset-button'}
+                      onClick={() => setLambdaValue(preset)}
+                    >
+                      {preset.toFixed(2)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="lambda-badge">λ = {lambdaValue.toFixed(2)} · {lambdaPercent}%</div>
+            </div>
+          </div>
+
+          <div className="tables-stack">
+            <TableCard
+              title="Нечёткие параметры c̃j = (a, b, c)"
+              subtitle="Время взлома каждого СЗИ задаётся тройкой чисел."
+            >
+              <TriangularInputTable
+                rows={protections}
+                values={cFuzzy}
+                onChange={(rowIndex, colIndex, value) => updateTriangularCell(setCFuzzy, cFuzzy, rowIndex, colIndex, value)}
+                rowPrefix="СЗИ"
+              />
+            </TableCard>
+
+            <TableCard
+              title="Нечёткие параметры d̃j = (a, b, c)"
+              subtitle="Время реакции отдела безопасности; допустимы нули."
+            >
+              <TriangularInputTable
+                rows={protections}
+                values={dFuzzy}
+                onChange={(rowIndex, colIndex, value) => updateTriangularCell(setDFuzzy, dFuzzy, rowIndex, colIndex, value)}
+                rowPrefix="СЗИ"
+              />
+            </TableCard>
+
+            <TableCard
+              title="Матрица стоимостей A и бюджеты b"
+              subtitle="Каждое значение вводится в отдельную ячейку, без строк через пробел."
+            >
+              <CostTable
+                assets={assets}
+                protections={protections}
+                values={costs}
+                budgets={budgets}
+                onCellChange={updateCostCell}
+                onBudgetChange={(index, value) => {
+                  const next = [...budgets]
+                  next[index] = value
+                  setBudgets(next)
+                }}
+              />
+            </TableCard>
+          </div>
+
+          {error ? <div className="error-box">{error}</div> : null}
+
+          <div className="solve-bar">
+            <button type="button" className="primary-button" onClick={handleSolve} disabled={loading}>
+              {loading ? 'Решение...' : 'Рассчитать оптимальное решение'}
             </button>
-          ))}
+          </div>
+        </section>
+
+        <aside className="panel panel--result">
+          <div className="panel-header">
+            <div>
+              <h2>Результат</h2>
+              <p>Показывается только итог после дефаззификации и решения чёткой задачи.</p>
+            </div>
+          </div>
+
+          {result ? (
+            <div className="result-stack">
+              <div className="metric-grid">
+                <MetricCard label="Оптимальная свёртка F(x*)" value={result.objective} accent />
+                <MetricCard label="Аддитивный критерий F1(x*)" value={result.f1} />
+                <MetricCard label="Максиминный критерий F2(x*)" value={result.f2} />
+                <MetricCard label="Метод дефаззификации" value={result.defuzz_method_label} />
+              </div>
+
+              <ResultSection title="Чёткие параметры после дефаззификации">
+                <ResultVector label="c (в исходном порядке)" values={result.c_crisp_original} />
+                <ResultVector label="d (в исходном порядке)" values={result.d_crisp_original} />
+              </ResultSection>
+
+              <ResultSection title="Сортировка по невозрастанию d">
+                <p className="result-note">
+                  Индексы СЗИ после сортировки: {result.sorted_order.join(', ')}.
+                </p>
+                <ResultVector label="c (отсортировано)" values={result.c_crisp_sorted} />
+                <ResultVector label="d (отсортировано)" values={result.d_crisp_sorted} />
+              </ResultSection>
+
+              <ResultSection title="Оптимальный выбор СЗИ">
+                <ResultVector label="x* в исходном порядке" values={result.solution_original} integer />
+                <ResultVector label="x* в отсортированном порядке" values={result.solution_sorted} integer />
+                <p className="result-note">
+                  Выбранные СЗИ в исходной нумерации: {result.selected_original_indices.length ? result.selected_original_indices.join(', ') : 'не выбрано ни одного'}.
+                </p>
+              </ResultSection>
+            </div>
+          ) : (
+            <div className="empty-result">
+              Заполните таблицы слева и нажмите «Рассчитать оптимальное решение», чтобы увидеть чёткие c, d и оптимальный вектор x*.
+            </div>
+          )}
+        </aside>
+      </main>
+    </div>
+  )
+}
+
+function TableCard({ title, subtitle, children }) {
+  return (
+    <section className="table-card">
+      <div className="table-card__header">
+        <div>
+          <h3>{title}</h3>
+          <p>{subtitle}</p>
         </div>
       </div>
-
-      {activeTab==="params" && (
-        <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
-          <Section title="Размерность задачи">
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
-              <Field label="m — групп ГИА" value={m} onChange={v=>{const x=parseInt(v)||1;setM(x);updateDimensions(x,n);}} type="number" min={1}/>
-              <Field label="n — видов СЗИ"  value={n} onChange={v=>{const x=parseInt(v)||1;setN(x);updateDimensions(m,x);}} type="number" min={1}/>
-              <Field label="λ ∈ [0,1]" value={lambda} onChange={setLambda} placeholder="0.5"/>
-            </div>
-          </Section>
-
-          <Section title="Параметры СЗИ">
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-              <div>
-                <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, letterSpacing:1 }}>cⱼ — время взлома j-го СЗИ</div>
-                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                  {Array.from({length:n},(_,j)=>(
-                    <Field key={j} label={`СЗИ ${j+1}`} value={cVals[j]||""} onChange={v=>{const a=[...cVals];a[j]=v;setCVals(a);}} placeholder="число"/>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize:11, color:"#94a3b8", marginBottom:8, letterSpacing:1 }}>dⱼ — время реагирования отдела безопасности</div>
-                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                  {Array.from({length:n},(_,j)=>(
-                    <Field key={j} label={`СЗИ ${j+1}`} value={dVals[j]||""} onChange={v=>{const a=[...dVals];a[j]=v;setDVals(a);}} placeholder="число"/>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </Section>
-
-          <Section title="Матрица стоимостей A (m×n) и бюджет b">
-            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-              <MatrixInput label="Матрица A — строки (ГИА × СЗИ)" value={Arows} onChange={setArows}/>
-              <Field label="Вектор b — бюджет по каждой ГИА (через пробел)" value={bVec} onChange={setBVec}/>
-            </div>
-          </Section>
-
-          {error && <div style={{ background:"#1c0a0a", border:"1px solid #7f1d1d", padding:"10px 14px", borderRadius:4, color:"#fca5a5", fontSize:12 }}>⚠ {error}</div>}
-
-          <button onClick={handleRun} style={{
-            background:"linear-gradient(135deg,#0369a1,#0ea5e9)", color:"#fff", border:"none",
-            padding:"12px 28px", borderRadius:6, cursor:"pointer", fontSize:14,
-            fontFamily:"monospace", letterSpacing:2, fontWeight:700,
-            boxShadow:"0 0 20px rgba(14,165,233,0.3)", alignSelf:"flex-start",
-          }}>▶ ЗАПУСТИТЬ АЛГОРИТМ</button>
-        </div>
-      )}
-
-      {activeTab==="result" && result && (
-        <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
-          <Section title="Таблица работы алгоритма">
-            <div style={{ overflowX:"auto" }}>
-              <table style={{ borderCollapse:"collapse", width:"100%", fontSize:12 }}>
-                <thead><tr>
-                  {["s","Шаг","Матрица","Вектор x","F₁(x)","F₂(x)","F(x)"].map((h,i)=>(
-                    <th key={i} style={{ padding:"6px 12px", textAlign:"center", color:"#7dd3fc", borderBottom:"1px solid #1e3a5f", background:"#0c1a2e", whiteSpace:"nowrap" }}>{h}</th>
-                  ))}
-                </tr></thead>
-                <tbody>
-                  {result.steps.map((step,i)=>{
-                    const isBest = result.bestIdx===i;
-                    return (
-                      <tr key={i} style={{ background:isBest?"rgba(14,165,233,0.12)":"transparent" }}>
-                        <td style={tdStyle}>{step.s}</td>
-                        <td style={{...tdStyle, color:"#94a3b8", textAlign:"left"}}>{step.label}</td>
-                        <td style={tdStyle}>{step.size}</td>
-                        <td style={{...tdStyle, fontFamily:"monospace", color:isBest?"#38bdf8":"#e2e8f0"}}>({step.x.join(",")})</td>
-                        <td style={tdStyle}>{fmt(step.F1)}</td>
-                        <td style={tdStyle}>{fmt(step.F2)}</td>
-                        <td style={{...tdStyle, color:isBest?"#38bdf8":"#e2e8f0", fontWeight:isBest?700:400}}>
-                          {fmt(step.F)}{isBest?" ★":""}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </Section>
-
-          <Section title="Оптимальное решение">
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:16 }}>
-              <Metric label="Вектор x*" value={`(${result.best.join(", ")})`} accent/>
-              <Metric label="F(x*) = λF₁ + (1-λ)F₂" value={fmt(result.bestF)} accent/>
-              <Metric label="F₁(x*) — сумм. время взлома" value={fmt(addObj(result.best, result.c))}/>
-              <Metric label="F₂(x*) — мин. время реаг." value={fmt(maxminObj(result.best, result.d))}/>
-            </div>
-            <div style={{ marginTop:16, display:"flex", flexWrap:"wrap", gap:10 }}>
-              {result.best.map((v,j)=>(
-                <div key={j} style={{
-                  background:v===1?"rgba(14,165,233,0.2)":"#0c1a2e",
-                  border:`1px solid ${v===1?"#0ea5e9":"#1e3a5f"}`,
-                  borderRadius:6, padding:"10px 16px", textAlign:"center",
-                }}>
-                  <div style={{ fontSize:11, color:"#64748b" }}>СЗИ {j+1}</div>
-                  <div style={{ fontSize:20, fontWeight:700, color:v===1?"#38bdf8":"#334155" }}>{v}</div>
-                  <div style={{ fontSize:10, color:"#475569", marginTop:2 }}>{v===1?"✓ принято":"✗ откл."}</div>
-                </div>
-              ))}
-            </div>
-          </Section>
-        </div>
-      )}
-
-      {activeTab==="result" && !result && (
-        <div style={{ color:"#475569", textAlign:"center", padding:"60px 20px", fontSize:14 }}>
-          Перейдите на вкладку «Параметры» и нажмите «Запустить алгоритм»
-        </div>
-      )}
-    </div>
-  );
-}
-
-const tdStyle = { padding:"7px 12px", textAlign:"center", borderBottom:"1px solid #0f2233", color:"#cbd5e1" };
-
-function Section({ title, children }) {
-  return (
-    <div style={{ background:"#060f1c", border:"1px solid #1e3a5f", borderRadius:8, padding:"18px 20px" }}>
-      <div style={{ fontSize:11, letterSpacing:2, color:"#38bdf8", textTransform:"uppercase", marginBottom:14, paddingBottom:8, borderBottom:"1px solid #0f2233" }}>{title}</div>
       {children}
-    </div>
-  );
+    </section>
+  )
 }
 
-function Field({ label, value, onChange, type="text", min, placeholder }) {
+function TriangularInputTable({ rows, values, onChange, rowPrefix }) {
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-      <label style={{ fontSize:11, color:"#7dd3fc", fontFamily:"monospace", letterSpacing:1 }}>{label}</label>
-      <input type={type} min={min} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-        style={{ background:"#0f172a", border:"1px solid #1e3a5f", color:"#e2e8f0", padding:"7px 10px", borderRadius:4, fontFamily:"monospace", fontSize:13 }}/>
+    <div className="table-wrap">
+      <table className="matrix-table">
+        <thead>
+          <tr>
+            <th>{rowPrefix}</th>
+            <th>a</th>
+            <th>b</th>
+            <th>c</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: rows }, (_, rowIndex) => (
+            <tr key={rowIndex}>
+              <th>{rowPrefix} {rowIndex + 1}</th>
+              {[0, 1, 2].map((columnIndex) => (
+                <td key={columnIndex}>
+                  <input
+                    type="number"
+                    step="0.001"
+                    value={values[rowIndex]?.[columnIndex] ?? ''}
+                    onChange={(event) => onChange(rowIndex, columnIndex, event.target.value)}
+                  />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
-  );
+  )
 }
 
-function MatrixInput({ label, value, onChange }) {
+function CostTable({ assets, protections, values, budgets, onCellChange, onBudgetChange }) {
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-      <label style={{ fontSize:11, color:"#7dd3fc", fontFamily:"monospace", letterSpacing:1 }}>{label}</label>
-      {value.map((row,i)=>(
-        <input key={i} value={row} onChange={e=>{const next=[...value];next[i]=e.target.value;onChange(next);}}
-          placeholder={`Строка ${i+1} (через пробел)`}
-          style={{ background:"#0f172a", border:"1px solid #1e3a5f", color:"#e2e8f0", padding:"5px 8px", borderRadius:4, fontFamily:"monospace", fontSize:13 }}/>
-      ))}
+    <div className="table-wrap">
+      <table className="matrix-table matrix-table--wide">
+        <thead>
+          <tr>
+            <th>ГИА \ СЗИ</th>
+            {Array.from({ length: protections }, (_, columnIndex) => (
+              <th key={columnIndex}>СЗИ {columnIndex + 1}</th>
+            ))}
+            <th>b</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: assets }, (_, rowIndex) => (
+            <tr key={rowIndex}>
+              <th>ГИА {rowIndex + 1}</th>
+              {Array.from({ length: protections }, (_, columnIndex) => (
+                <td key={columnIndex}>
+                  <input
+                    type="number"
+                    step="0.001"
+                    value={values[rowIndex]?.[columnIndex] ?? ''}
+                    onChange={(event) => onCellChange(rowIndex, columnIndex, event.target.value)}
+                  />
+                </td>
+              ))}
+              <td>
+                <input
+                  type="number"
+                  step="0.001"
+                  value={budgets[rowIndex] ?? ''}
+                  onChange={(event) => onBudgetChange(rowIndex, event.target.value)}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
-  );
+  )
 }
 
-function Metric({ label, value, accent }) {
+function MetricCard({ label, value, accent = false }) {
   return (
-    <div style={{ background:accent?"rgba(14,165,233,0.08)":"#0a1525", border:`1px solid ${accent?"#0369a1":"#1e3a5f"}`, borderRadius:6, padding:"12px 14px" }}>
-      <div style={{ fontSize:10, color:"#64748b", marginBottom:4, letterSpacing:1 }}>{label}</div>
-      <div style={{ fontSize:16, fontWeight:700, color:accent?"#38bdf8":"#e2e8f0", wordBreak:"break-all" }}>{value}</div>
+    <div className={accent ? 'metric-card metric-card--accent' : 'metric-card'}>
+      <span>{label}</span>
+      <strong>{typeof value === 'number' ? value.toFixed(3) : value}</strong>
     </div>
-  );
+  )
 }
+
+function ResultSection({ title, children }) {
+  return (
+    <section className="result-section">
+      <h3>{title}</h3>
+      {children}
+    </section>
+  )
+}
+
+function ResultVector({ label, values, integer = false }) {
+  return (
+    <div className="vector-block">
+      <span>{label}</span>
+      <div className="vector-list">
+        {values.map((value, index) => (
+          <div key={`${label}-${index}`} className="vector-chip">
+            <em>{index + 1}</em>
+            <strong>{integer ? value : Number(value).toFixed(3)}</strong>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export default App
