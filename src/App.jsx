@@ -85,7 +85,16 @@ function resizeVector(vector, size) {
 }
 
 function parseNumber(value, label) {
-  const parsed = Number(value)
+  if (value === '' || value === null || value === undefined) {
+    throw new Error(`Поле «${label}» не должно быть пустым.`)
+  }
+
+  const raw = typeof value === 'string' ? value.trim() : String(value)
+  if (raw === '') {
+    throw new Error(`Поле «${label}» не должно быть пустым.`)
+  }
+
+  const parsed = Number(raw)
   if (!Number.isFinite(parsed)) {
     throw new Error(`Поле «${label}» заполнено некорректно.`)
   }
@@ -313,6 +322,27 @@ function App() {
 
     checkTriangular(payload.c_fuzzy, 'c̃')
     checkTriangular(payload.d_fuzzy, 'd̃')
+
+    payload.cost_matrix.forEach((row, rowIndex) => {
+      row.forEach((value, colIndex) => {
+        if (value < 0) {
+          throw new Error(`A[${rowIndex + 1}, ${colIndex + 1}] должно быть неотрицательным.`)
+        }
+      })
+    })
+
+    payload.budgets.forEach((value, rowIndex) => {
+      if (value < 0) {
+        throw new Error(`b${rowIndex + 1} должно быть неотрицательным.`)
+      }
+    })
+
+    payload.cost_matrix.forEach((row, rowIndex) => {
+      const rowMax = Math.max(...row)
+      if (rowMax > payload.budgets[rowIndex]) {
+        throw new Error(`Для строки ${rowIndex + 1} должно выполняться max(A[i,*]) ≤ b[i].`)
+      }
+    })
   }
 
   const handleSolve = async () => {
