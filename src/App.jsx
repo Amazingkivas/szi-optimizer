@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
 const EXAMPLE = {
@@ -102,40 +102,14 @@ function formatValue(value, precision = 3) {
   return value.toFixed(precision)
 }
 
-function openResultWindow(result) {
-  const selected = result.selected_original_indices.length
-    ? result.selected_original_indices.join(', ')
-    : 'нет выбранных СЗИ'
-
-  const vector = result.solution_original.join(', ')
-  const popup = window.open('', 'szi_result_window', 'width=760,height=540,menubar=no,toolbar=no,location=no')
-  if (!popup) {
-    return false
-  }
-
-  popup.document.title = 'Оптимальное решение'
-  popup.document.body.innerHTML = `
-    <main style="margin:0;min-height:100vh;background:#070f1d;color:#e7f0ff;font-family:Inter,Segoe UI,sans-serif;display:grid;place-items:center;padding:20px;box-sizing:border-box;">
-      <section style="width:min(720px,100%);background:rgba(16,27,48,0.92);border:1px solid rgba(114,160,255,0.28);border-radius:20px;padding:24px;box-shadow:0 16px 40px rgba(0,0,0,0.35);">
-        <h1 style="margin:0 0 16px 0;font-size:24px;">Оптимальное решение</h1>
-        <div style="display:grid;gap:14px;font-size:18px;line-height:1.35;">
-          <div><strong>x*</strong> = (${vector})</div>
-          <div><strong>Выбранные СЗИ</strong>: ${selected}</div>
-          <div><strong>F(x*)</strong> = ${formatValue(result.objective, 6)}</div>
-        </div>
-      </section>
-    </main>
-  `
-  popup.document.body.style.margin = '0'
-  popup.focus()
-  return true
-}
-
 function App() {
   const initial = useMemo(createExampleState, [])
+  const toastTimerRef = useRef(null)
 
   const [assets, setAssets] = useState(initial.assets)
   const [protections, setProtections] = useState(initial.protections)
+  const [assetsInput, setAssetsInput] = useState(String(initial.assets))
+  const [protectionsInput, setProtectionsInput] = useState(String(initial.protections))
   const [lambdaValue, setLambdaValue] = useState(initial.lambda)
   const [defuzzMethod, setDefuzzMethod] = useState(initial.defuzzMethod)
 
@@ -151,8 +125,45 @@ function App() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [toast, setToast] = useState('')
   const [status, setStatus] = useState('Результат ещё не вычислен.')
-  const [lastResult, setLastResult] = useState(null)
+  const [result, setResult] = useState(null)
+
+  const showToast = (message) => {
+    setToast(message)
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current)
+    }
+    toastTimerRef.current = setTimeout(() => {
+      setToast('')
+      toastTimerRef.current = null
+    }, 2600)
+  }
+
+  const applyDimensionValue = (field, rawValue) => {
+    const parsed = Number(rawValue)
+    if (!Number.isInteger(parsed) || parsed < 1) {
+      showToast(`Поле ${field} должно быть целым числом не меньше 1.`)
+      if (field === 'm') setAssetsInput(String(assets))
+      if (field === 'n') setProtectionsInput(String(protections))
+      return
+    }
+
+    if (field === 'm') {
+      setAssets(parsed)
+      setAssetsInput(String(parsed))
+    }
+    if (field === 'n') {
+      setProtections(parsed)
+      setProtectionsInput(String(parsed))
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     fetch('/api/meta')
@@ -172,7 +183,7 @@ function App() {
     setDFuzzy((current) => resizeTriangular(current, protections))
     setCosts((current) => resizeCosts(current, assets, protections))
     setBudgets((current) => resizeVector(current, assets))
-    setLastResult(null)
+    setResult(null)
     setStatus('Параметры изменены. Выполните новый расчёт.')
   }, [assets, protections])
 
@@ -198,6 +209,8 @@ function App() {
     const example = createExampleState()
     setAssets(example.assets)
     setProtections(example.protections)
+    setAssetsInput(String(example.assets))
+    setProtectionsInput(String(example.protections))
     setLambdaValue(example.lambda)
     setDefuzzMethod(example.defuzzMethod)
     setCFuzzy(example.cFuzzy)
@@ -208,7 +221,7 @@ function App() {
     setCostRowPage(0)
     setCostColPage(0)
     setError('')
-    setLastResult(null)
+    setResult(null)
     setStatus('Загружен пример. Можно запускать расчёт.')
   }
 
@@ -218,7 +231,7 @@ function App() {
     setCosts(createMatrix(assets, protections))
     setBudgets(createVector(assets))
     setError('')
-    setLastResult(null)
+    setResult(null)
     setStatus('Поля очищены.')
   }
 
@@ -238,14 +251,6 @@ function App() {
     const next = [...budgets]
     next[rowIndex] = value
     setBudgets(next)
-  }
-
-  const openLastResult = () => {
-    if (!lastResult) return
-    const ok = openResultWindow(lastResult)
-    if (!ok) {
-      setError('Браузер заблокировал всплывающее окно результата. Разрешите pop-up для этого сайта.')
-    }
   }
 
   const handleSolve = async () => {
@@ -273,13 +278,8 @@ function App() {
         throw new Error(data.error || 'Сервер не смог решить задачу.')
       }
 
-      setLastResult(data)
-      const popupOpened = openResultWindow(data)
-      setStatus(
-        popupOpened
-          ? 'Оптимальное решение открыто в отдельном окне.'
-          : 'Решение найдено, но окно не открылось (поп-ап заблокирован).'
-      )
+      setResult(data)
+      setStatus('Оптимальное решение рассчитано и показано справа.')
     } catch (solveError) {
       setError(solveError.message)
       setStatus('Ошибка расчёта.')
@@ -290,6 +290,8 @@ function App() {
 
   return (
     <div className="app-screen">
+      {toast ? <div className="toast">{toast}</div> : null}
+
       <section className="panel config-panel">
         <div className="controls-row">
           <label className="field">
@@ -297,8 +299,15 @@ function App() {
             <input
               type="number"
               min="1"
-              value={assets}
-              onChange={(event) => setAssets(Math.max(1, Number(event.target.value) || 1))}
+              value={assetsInput}
+              onChange={(event) => setAssetsInput(event.target.value)}
+              onBlur={(event) => applyDimensionValue('m', event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  applyDimensionValue('m', event.currentTarget.value)
+                  event.currentTarget.blur()
+                }
+              }}
             />
           </label>
 
@@ -307,8 +316,15 @@ function App() {
             <input
               type="number"
               min="1"
-              value={protections}
-              onChange={(event) => setProtections(Math.max(1, Number(event.target.value) || 1))}
+              value={protectionsInput}
+              onChange={(event) => setProtectionsInput(event.target.value)}
+              onBlur={(event) => applyDimensionValue('n', event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  applyDimensionValue('n', event.currentTarget.value)
+                  event.currentTarget.blur()
+                }
+              }}
             />
           </label>
 
@@ -428,13 +444,19 @@ function App() {
 
       <section className="panel result-panel">
         <h2>Результаты</h2>
-        <p>Оптимальное решение открывается в отдельном окне без дополнительной информации.</p>
+        <p>Здесь показывается только оптимальное решение.</p>
         <div className="status-box">{status}</div>
-        {lastResult ? (
-          <button type="button" className="btn btn--primary" onClick={openLastResult}>
-            Открыть окно результата
-          </button>
-        ) : null}
+
+        {result ? (
+          <div className="result-solution">
+            <div><strong>x*</strong> = ({result.solution_original.join(', ')})</div>
+            <div><strong>Выбранные СЗИ:</strong> {result.selected_original_indices.length ? result.selected_original_indices.join(', ') : 'нет выбранных СЗИ'}</div>
+            <div><strong>F(x*) =</strong> {formatValue(result.objective, 6)}</div>
+          </div>
+        ) : (
+          <div className="result-empty">После расчёта здесь появится оптимальное решение.</div>
+        )}
+
         {error ? <div className="error-box">{error}</div> : null}
       </section>
     </div>

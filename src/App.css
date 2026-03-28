@@ -319,3 +319,36 @@ select {
     grid-column: 1 / -1;
   }
 }
+
+
+.result-solution,
+.result-empty {
+  border-radius: 10px;
+  border: 1px solid rgba(125, 164, 255, 0.18);
+  background: rgba(7, 13, 25, 0.78);
+  padding: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #e7f0ff;
+}
+
+.result-solution {
+  display: grid;
+  gap: 8px;
+}
+
+.toast {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  max-width: 90vw;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 169, 83, 0.5);
+  background: rgba(61, 35, 12, 0.93);
+  color: #ffd9a6;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+  font-size: 13px;
+}
