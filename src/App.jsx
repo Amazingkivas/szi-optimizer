@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
 const EXAMPLE = {
@@ -254,8 +254,52 @@ function App() {
   }
 
   const displayedSolution = result?.solution_original ?? Array.from({ length: protections }, () => 0)
-  const tilesPerSide = Math.max(1, Math.ceil(Math.sqrt(displayedSolution.length || 1)))
-  const tileSize = Math.max(20, Math.min(52, Math.floor(220 / tilesPerSide)))
+  const visualRef = useRef(null)
+  const [gridShape, setGridShape] = useState({ cols: 1, rows: 1 })
+
+  const recalcGridShape = useCallback(() => {
+    const node = visualRef.current
+    const n = Math.max(1, displayedSolution.length)
+    if (!node) {
+      setGridShape({ cols: Math.ceil(Math.sqrt(n)), rows: Math.ceil(n / Math.ceil(Math.sqrt(n))) })
+      return
+    }
+
+    const width = Math.max(1, node.clientWidth)
+    const height = Math.max(1, node.clientHeight)
+
+    let bestCols = 1
+    let bestRows = n
+    let bestScore = Number.POSITIVE_INFINITY
+    let bestArea = 0
+
+    for (let cols = 1; cols <= n; cols += 1) {
+      const rows = Math.ceil(n / cols)
+      const cellW = width / cols
+      const cellH = height / rows
+      const ratioPenalty = Math.abs(Math.log(cellW / Math.max(cellH, 1e-6)))
+      const area = cellW * cellH
+
+      if (ratioPenalty < bestScore - 1e-6 || (Math.abs(ratioPenalty - bestScore) <= 1e-6 && area > bestArea)) {
+        bestScore = ratioPenalty
+        bestArea = area
+        bestCols = cols
+        bestRows = rows
+      }
+    }
+
+    setGridShape({ cols: bestCols, rows: bestRows })
+  }, [displayedSolution.length])
+
+  useEffect(() => {
+    recalcGridShape()
+    const node = visualRef.current
+    if (!node || typeof ResizeObserver === 'undefined') return
+
+    const observer = new ResizeObserver(() => recalcGridShape())
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [recalcGridShape])
 
   const handleSolve = async () => {
     try {
@@ -460,7 +504,7 @@ function App() {
           <div className="result-empty">Ожидание расчёта.</div>
         )}
 
-        <div className="szi-visual" style={{ '--tile-size': `${tileSize}px` }}>
+        <div className="szi-visual" ref={visualRef} style={{ '--szi-cols': gridShape.cols, '--szi-rows': gridShape.rows }}>
           {displayedSolution.map((value, index) => (
             <div key={index} className={value === 1 ? 'szi-tile szi-tile--selected' : 'szi-tile'} title={`СЗИ ${index + 1}: ${value === 1 ? 'выбрано' : 'не выбрано'}`}>
               {index + 1}
