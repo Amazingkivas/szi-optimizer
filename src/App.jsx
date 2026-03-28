@@ -253,6 +253,10 @@ function App() {
     setBudgets(next)
   }
 
+  const displayedSolution = result?.solution_original ?? Array.from({ length: protections }, () => 0)
+  const tilesPerSide = Math.max(1, Math.ceil(Math.sqrt(displayedSolution.length || 1)))
+  const tileSize = Math.max(20, Math.min(52, Math.floor(220 / tilesPerSide)))
+
   const handleSolve = async () => {
     try {
       setLoading(true)
@@ -279,7 +283,7 @@ function App() {
       }
 
       setResult(data)
-      setStatus('Оптимальное решение рассчитано и показано справа.')
+      setStatus('Расчёт завершён.')
     } catch (solveError) {
       setError(solveError.message)
       setStatus('Ошибка расчёта.')
@@ -444,7 +448,6 @@ function App() {
 
       <section className="panel result-panel">
         <h2>Результаты</h2>
-        <p>Здесь показывается только оптимальное решение.</p>
         <div className="status-box">{status}</div>
 
         {result ? (
@@ -454,8 +457,16 @@ function App() {
             <div><strong>F(x*) =</strong> {formatValue(result.objective, 6)}</div>
           </div>
         ) : (
-          <div className="result-empty">После расчёта здесь появится оптимальное решение.</div>
+          <div className="result-empty">Ожидание расчёта.</div>
         )}
+
+        <div className="szi-visual" style={{ '--tile-size': `${tileSize}px` }}>
+          {displayedSolution.map((value, index) => (
+            <div key={index} className={value === 1 ? 'szi-tile szi-tile--selected' : 'szi-tile'} title={`СЗИ ${index + 1}: ${value === 1 ? 'выбрано' : 'не выбрано'}`}>
+              {index + 1}
+            </div>
+          ))}
+        </div>
 
         {error ? <div className="error-box">{error}</div> : null}
       </section>

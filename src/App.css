@@ -352,3 +352,37 @@ select {
   box-shadow: 0 10px 30px rgba(0,0,0,0.35);
   font-size: 13px;
 }
+
+
+.szi-visual {
+  border-radius: 10px;
+  border: 1px solid rgba(125, 164, 255, 0.18);
+  background: rgba(5, 11, 20, 0.72);
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--tile-size, 28px), 1fr));
+  gap: 6px;
+  align-content: start;
+  min-height: 140px;
+  max-height: 260px;
+  overflow: hidden;
+}
+
+.szi-tile {
+  height: var(--tile-size, 28px);
+  min-height: 20px;
+  border-radius: 8px;
+  border: 1px solid rgba(141, 174, 238, 0.28);
+  background: rgba(42, 58, 88, 0.4);
+  color: #c7dbff;
+  font-size: clamp(10px, 1.2vw, 13px);
+  display: grid;
+  place-items: center;
+  font-weight: 600;
+}
+
+.szi-tile--selected {
+  border-color: rgba(108, 248, 214, 0.85);
+  background: linear-gradient(135deg, rgba(85, 194, 255, 0.25), rgba(100, 248, 204, 0.28));
+  color: #ecfffb;
+}
