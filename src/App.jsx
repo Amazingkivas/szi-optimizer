@@ -301,11 +301,26 @@ function App() {
     return () => observer.disconnect()
   }, [recalcGridShape])
 
+
+  const validateClientData = (payload) => {
+    const checkTriangular = (rows, name) => {
+      rows.forEach((row, rowIndex) => {
+        if (!(row[0] <= row[1] && row[1] <= row[2])) {
+          throw new Error(`${name}${rowIndex + 1}: должно выполняться a ≤ b ≤ c.`)
+        }
+      })
+    }
+
+    checkTriangular(payload.c_fuzzy, 'c̃')
+    checkTriangular(payload.d_fuzzy, 'd̃')
+  }
+
   const handleSolve = async () => {
     try {
       setLoading(true)
       setError('')
       setStatus('Вычисление...')
+      setToast('')
 
       const payload = {
         lambda: lambdaValue,
@@ -316,6 +331,8 @@ function App() {
         budgets: budgets.map((value, index) => parseNumber(value, `b${index + 1}`)),
       }
 
+      validateClientData(payload)
+
       const response = await fetch('/api/solve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -323,12 +340,15 @@ function App() {
       })
       const data = await response.json()
       if (!response.ok) {
-        throw new Error(data.error || 'Сервер не смог решить задачу.')
+        const message = data.error || 'Сервер не смог решить задачу.'
+        showToast(message)
+        throw new Error(message)
       }
 
       setResult(data)
       setStatus('Расчёт завершён.')
     } catch (solveError) {
+      showToast(solveError.message)
       setError(solveError.message)
       setStatus('Ошибка расчёта.')
     } finally {
