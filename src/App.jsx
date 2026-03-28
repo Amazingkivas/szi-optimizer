@@ -84,19 +84,19 @@ function resizeVector(vector, size) {
   return next.slice(0, size)
 }
 
-function parseNumber(value, label) {
+function parseNumber(value) {
   if (value === '' || value === null || value === undefined) {
-    throw new Error(`Поле «${label}» не должно быть пустым.`)
+    throw new Error('Обнаружены пустые поля. Заполните все значения.')
   }
 
   const raw = typeof value === 'string' ? value.trim() : String(value)
   if (raw === '') {
-    throw new Error(`Поле «${label}» не должно быть пустым.`)
+    throw new Error('Обнаружены пустые поля. Заполните все значения.')
   }
 
   const parsed = Number(raw)
   if (!Number.isFinite(parsed)) {
-    throw new Error(`Поле «${label}» заполнено некорректно.`)
+    throw new Error('Есть некорректные числовые значения. Проверьте ввод.')
   }
   return parsed
 }
@@ -312,35 +312,35 @@ function App() {
 
 
   const validateClientData = (payload) => {
-    const checkTriangular = (rows, name) => {
-      rows.forEach((row, rowIndex) => {
+    const checkTriangular = (rows) => {
+      rows.forEach((row) => {
         if (!(row[0] <= row[1] && row[1] <= row[2])) {
-          throw new Error(`${name}${rowIndex + 1}: должно выполняться a ≤ b ≤ c.`)
+          throw new Error('Для нечётких параметров должно выполняться условие a ≤ b ≤ c.')
         }
       })
     }
 
-    checkTriangular(payload.c_fuzzy, 'c̃')
-    checkTriangular(payload.d_fuzzy, 'd̃')
+    checkTriangular(payload.c_fuzzy)
+    checkTriangular(payload.d_fuzzy)
 
-    payload.cost_matrix.forEach((row, rowIndex) => {
-      row.forEach((value, colIndex) => {
+    payload.cost_matrix.forEach((row) => {
+      row.forEach((value) => {
         if (value < 0) {
-          throw new Error(`A[${rowIndex + 1}, ${colIndex + 1}] должно быть неотрицательным.`)
+          throw new Error('Матрица A должна содержать только неотрицательные значения.')
         }
       })
     })
 
-    payload.budgets.forEach((value, rowIndex) => {
+    payload.budgets.forEach((value) => {
       if (value < 0) {
-        throw new Error(`b${rowIndex + 1} должно быть неотрицательным.`)
+        throw new Error('Вектор b должен содержать только неотрицательные значения.')
       }
     })
 
     payload.cost_matrix.forEach((row, rowIndex) => {
       const rowMax = Math.max(...row)
       if (rowMax > payload.budgets[rowIndex]) {
-        throw new Error(`Для строки ${rowIndex + 1} должно выполняться max(A[i,*]) ≤ b[i].`)
+        throw new Error('Должно выполняться условие: для каждой ГИА максимум по A не превышает b.')
       }
     })
   }
@@ -355,10 +355,10 @@ function App() {
       const payload = {
         lambda: lambdaValue,
         defuzz_method: defuzzMethod,
-        c_fuzzy: cFuzzy.map((row, index) => row.map((value, col) => parseNumber(value, `c̃${index + 1}[${col + 1}]`))),
-        d_fuzzy: dFuzzy.map((row, index) => row.map((value, col) => parseNumber(value, `d̃${index + 1}[${col + 1}]`))),
-        cost_matrix: costs.map((row, rowIndex) => row.map((value, colIndex) => parseNumber(value, `A[${rowIndex + 1}, ${colIndex + 1}]`))),
-        budgets: budgets.map((value, index) => parseNumber(value, `b${index + 1}`)),
+        c_fuzzy: cFuzzy.map((row) => row.map((value) => parseNumber(value))),
+        d_fuzzy: dFuzzy.map((row) => row.map((value) => parseNumber(value))),
+        cost_matrix: costs.map((row) => row.map((value) => parseNumber(value))),
+        budgets: budgets.map((value) => parseNumber(value)),
       }
 
       validateClientData(payload)
