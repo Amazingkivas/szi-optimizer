@@ -114,6 +114,7 @@ function formatValue(value, precision = 3) {
 function App() {
   const initial = useMemo(createExampleState, [])
   const toastTimerRef = useRef(null)
+  const fileInputRef = useRef(null)
 
   const [assets, setAssets] = useState(initial.assets)
   const [protections, setProtections] = useState(initial.protections)
@@ -214,24 +215,88 @@ function App() {
   const costColStart = costColPage * COST_COLS_PER_PAGE
   const costColEnd = Math.min(protections, costColStart + COST_COLS_PER_PAGE)
 
-  const setExample = () => {
-    const example = createExampleState()
-    setAssets(example.assets)
-    setProtections(example.protections)
-    setAssetsInput(String(example.assets))
-    setProtectionsInput(String(example.protections))
-    setLambdaValue(example.lambda)
-    setDefuzzMethod(example.defuzzMethod)
-    setCFuzzy(example.cFuzzy)
-    setDFuzzy(example.dFuzzy)
-    setCosts(example.costs)
-    setBudgets(example.budgets)
+
+  const normalizeUploadedMatrix = (matrix, rowCount, colCount, label) => {
+    if (!Array.isArray(matrix) || matrix.length !== rowCount) {
+      throw new Error(`Размерности в файле не соответствуют ожидаемому формату для ${label}.`)
+    }
+
+    return matrix.map((row) => {
+      if (!Array.isArray(row) || row.length !== colCount) {
+        throw new Error(`Размерности в файле не соответствуют ожидаемому формату для ${label}.`)
+      }
+      return row.map((value) => String(value))
+    })
+  }
+
+  const loadFromConfigFile = async (file) => {
+    const text = await file.text()
+    let config
+    try {
+      config = JSON.parse(text)
+    } catch {
+      throw new Error('Файл имеет некорректный JSON-формат.')
+    }
+
+    const nextAssets = Number(config.assets)
+    const nextProtections = Number(config.protections)
+    if (!Number.isInteger(nextAssets) || !Number.isInteger(nextProtections) || nextAssets < 1 || nextProtections < 1) {
+      throw new Error('В файле должны быть корректные целые значения размерностей m и n.')
+    }
+
+    const cUploaded = normalizeUploadedMatrix(config.cFuzzy, nextProtections, 3, 'c̃')
+    const dUploaded = normalizeUploadedMatrix(config.dFuzzy, nextProtections, 3, 'd̃')
+    const costsUploaded = normalizeUploadedMatrix(config.costs, nextAssets, nextProtections, 'A')
+
+    if (!Array.isArray(config.budgets) || config.budgets.length !== nextAssets) {
+      throw new Error('Размерности в файле не соответствуют ожидаемому формату для b.')
+    }
+
+    const lambdaUploaded = Number(config.lambda)
+    if (!Number.isFinite(lambdaUploaded) || lambdaUploaded < 0 || lambdaUploaded > 1) {
+      throw new Error('В файле должно быть корректное значение λ в диапазоне [0, 1].')
+    }
+
+    const methodUploaded = String(config.defuzzMethod)
+    const methodExists = defuzzOptions.some((option) => option.value === methodUploaded)
+    if (!methodExists) {
+      throw new Error('Метод дефаззификации в файле не поддерживается.')
+    }
+
+    setAssets(nextAssets)
+    setProtections(nextProtections)
+    setAssetsInput(String(nextAssets))
+    setProtectionsInput(String(nextProtections))
+    setLambdaValue(lambdaUploaded)
+    setDefuzzMethod(methodUploaded)
+    setCFuzzy(cUploaded)
+    setDFuzzy(dUploaded)
+    setCosts(costsUploaded)
+    setBudgets(config.budgets.map((value) => String(value)))
     setTriPage(0)
     setCostRowPage(0)
     setCostColPage(0)
     setError('')
     setResult(null)
-    setStatus('Загружен пример. Можно запускать расчёт.')
+    setStatus('Данные из файла успешно загружены.')
+  }
+
+  const handleLoadFileClick = () => {
+    if (!fileInputRef.current) return
+    fileInputRef.current.value = ''
+    fileInputRef.current.click()
+  }
+
+  const handleConfigFileChange = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    try {
+      await loadFromConfigFile(file)
+    } catch (loadError) {
+      showToast(loadError.message)
+      setError(loadError.message)
+    }
   }
 
   const clearAll = () => {
@@ -462,12 +527,19 @@ function App() {
           </div>
 
           <div className="field field--actions">
-            <button type="button" className="btn btn--secondary" onClick={setExample}>
-              Пример
+            <button type="button" className="btn btn--secondary" onClick={handleLoadFileClick}>
+              Загрузить файл
             </button>
             <button type="button" className="btn btn--ghost" onClick={clearAll}>
               Очистить
             </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden-file-input"
+              onChange={handleConfigFileChange}
+            />
             <button type="button" className="btn btn--primary" onClick={handleSolve} disabled={loading}>
               {loading ? 'Считаю...' : 'Рассчитать'}
             </button>

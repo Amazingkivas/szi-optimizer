@@ -389,3 +389,8 @@ select {
   background: linear-gradient(135deg, rgba(85, 194, 255, 0.25), rgba(100, 248, 204, 0.28));
   color: #ecfffb;
 }
+
+
+.hidden-file-input {
+  display: none;
+}
