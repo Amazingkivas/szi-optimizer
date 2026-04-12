@@ -101,17 +101,16 @@ button, input, select { font: inherit; }
 }
 
 .top-menu-slot {
-  border: 1px solid var(--panel-border);
-  background: var(--panel-bg);
-  border-radius: 8px;
-  padding: 4px;
   width: fit-content;
 }
 .top-menu { position: relative; z-index: 25; }
 .top-menu__trigger { width: 40px; height: 36px; border-radius: 6px; }
 .top-menu__dropdown {
-  margin-top: 6px;
-  width: 210px;
+  position: absolute;
+  right: 100%;
+  top: 0;
+  margin-top: 8px;
+  width: 260px;
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   border-radius: 10px;
@@ -121,7 +120,7 @@ button, input, select { font: inherit; }
   gap: 8px;
 }
 .top-menu__dropdown label { display: grid; gap: 4px; }
-.top-menu__dropdown label span { color: var(--muted-text); font-size: 14px; }
+.top-menu__dropdown label span { color: var(--muted-text); font-size: 16px; }
 
 .panel {
   height: 100%;
@@ -133,15 +132,10 @@ button, input, select { font: inherit; }
 
 .config-panel {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   gap: 8px;
   padding: 8px;
   min-height: 0;
-}
-
-.menu-row {
-  display: flex;
-  justify-content: flex-end;
 }
 
 .controls-row {
@@ -158,9 +152,9 @@ button, input, select { font: inherit; }
   display: grid;
   align-content: start;
   gap: 5px;
-  min-height: 72px;
+  min-height: 90px;
 }
-.field span { font-size: 14px; color: var(--muted-text); }
+.field span { font-size: 18px; color: var(--muted-text); }
 .field input,
 .field select,
 .matrix-table input,
@@ -173,10 +167,36 @@ button, input, select { font: inherit; }
   color: var(--input-color);
   padding: 4px 6px;
   height: 29px;
-  font-size: 16px;
+  font-size: 22px;
 }
 
-.field--actions { grid-template-columns: 1fr; }
+.field--fill input,
+.field--fill select {
+  align-self: stretch;
+  min-height: 56px;
+  height: 100%;
+}
+
+.field--fill {
+  grid-template-rows: auto 1fr;
+}
+
+.field--actions {
+  grid-template-columns: minmax(0, 1fr) 120px;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.actions-main {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.actions-menu {
+  position: relative;
+  display: grid;
+}
 .lambda-inputs {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 72px;
@@ -187,14 +207,21 @@ button, input, select { font: inherit; }
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  height: 38px;
+  height: 56px;
   font-weight: 600;
-  font-size: 16px;
+  font-size: 20px;
 }
 .btn--primary { background: linear-gradient(135deg, #8ccfff, #72f6d7); color: #04111f; }
 .btn--secondary { background: linear-gradient(135deg, #4f72f1, #649bff); color: #ecf6ff; }
 .btn--ghost { background: rgba(120, 152, 213, 0.2); border: 1px solid rgba(120, 152, 213, 0.24); color: var(--text-main); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn--menu {
+  height: 100%;
+  min-height: 100%;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  letter-spacing: 1px;
+}
 
 .preset-row { display: flex; gap: 6px; }
 .preset {
@@ -203,8 +230,8 @@ button, input, select { font: inherit; }
   color: var(--text-main);
   background: rgba(23, 36, 61, 0.7);
   cursor: pointer;
-  font-size: 13px;
-  padding: 5px 8px;
+  font-size: 16px;
+  padding: 8px 10px;
 }
 .preset--active { color: #001221; background: linear-gradient(135deg, #83ddff, #6dffc9); }
 
@@ -227,7 +254,7 @@ button, input, select { font: inherit; }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 16px;
+  font-size: 22px;
 }
 
 .single-set-fields {
@@ -236,7 +263,7 @@ button, input, select { font: inherit; }
   gap: 6px;
 }
 .single-set-fields label { display: grid; gap: 3px; }
-.single-set-fields span { font-size: 14px; color: var(--muted-text); }
+.single-set-fields span { font-size: 18px; color: var(--muted-text); }
 
 .table-block {
   min-height: 0;
@@ -261,7 +288,7 @@ button, input, select { font: inherit; }
 .matrix-table td {
   text-align: center;
   padding: 0;
-  font-size: clamp(20px, 2.7vmin, 44px);
+  font-size: clamp(24px, 3.2vmin, 52px);
   width: var(--matrix-cell-size, 76px);
   min-width: var(--matrix-cell-size, 76px);
   height: var(--matrix-cell-size, 76px);
@@ -272,7 +299,7 @@ button, input, select { font: inherit; }
   height: 100%;
   min-height: var(--matrix-cell-size, 76px);
   border-radius: 0;
-  font-size: clamp(22px, 3vmin, 50px);
+  font-size: clamp(26px, 3.4vmin, 58px);
   text-align: center;
   line-height: 1;
   font-weight: 700;
@@ -280,6 +307,14 @@ button, input, select { font: inherit; }
 }
 .matrix-table--full tbody tr {
   height: var(--matrix-cell-size, 76px);
+}
+
+.matrix-table .budget-col {
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  background: var(--panel-bg);
+  box-shadow: -2px 0 0 rgba(0, 0, 0, 0.2);
 }
 
 .pager-controls { display: flex; align-items: center; gap: 4px; }
@@ -294,7 +329,7 @@ button, input, select { font: inherit; }
 }
 
 .status-inline {
-  font-size: 16px;
+  font-size: 22px;
   color: var(--muted-text);
   padding: 2px 6px;
 }
@@ -305,7 +340,7 @@ button, input, select { font: inherit; }
   background: rgba(60, 16, 30, 0.72);
   color: #ffd2db;
   padding: 8px 10px;
-  font-size: 16px;
+  font-size: 20px;
 }
 
 .toast {
@@ -321,7 +356,7 @@ button, input, select { font: inherit; }
   background: rgba(61, 35, 12, 0.93);
   color: #ffd9a6;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-  font-size: 16px;
+  font-size: 20px;
 }
 
 .modal-backdrop {
@@ -346,7 +381,7 @@ button, input, select { font: inherit; }
   gap: 8px;
 }
 .result-modal h2 { margin: 0 0 6px; }
-.result-modal { font-size: 18px; }
+.result-modal { font-size: 24px; }
 
 .hidden-file-input { display: none; }
 

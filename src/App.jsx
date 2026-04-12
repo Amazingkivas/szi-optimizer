@@ -414,39 +414,8 @@ function App() {
       {toast ? <div className="toast">{toast}</div> : null}
 
       <section className="panel config-panel">
-        <div className="menu-row">
-          <div className="top-menu-slot">
-            <div className="top-menu">
-              <button type="button" className="btn btn--ghost top-menu__trigger" onClick={() => setIsMenuOpen((open) => !open)}>☰</button>
-              {isMenuOpen ? (
-                <div className="top-menu__dropdown">
-                  <strong>{t.menu}</strong>
-                  <label>
-                    <span>{t.theme}</span>
-                    <select value={theme} onChange={(event) => setTheme(event.target.value)}>
-                      <option value="dark">{t.dark}</option>
-                      <option value="red">{t.red}</option>
-                      <option value="green">{t.green}</option>
-                      <option value="gray">{t.gray}</option>
-                      <option value="ocean">{t.ocean}</option>
-                      <option value="violet">{t.violet}</option>
-                    </select>
-                  </label>
-                  <label>
-                    <span>{t.language}</span>
-                    <select value={language} onChange={(event) => setLanguage(event.target.value)}>
-                      <option value="ru">{t.russian}</option>
-                      <option value="en">{t.english}</option>
-                    </select>
-                  </label>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </div>
-
         <div className="controls-row">
-          <label className="field">
+          <label className="field field--fill">
             <span>m (ГИА)</span>
             <input
               type="number"
@@ -458,7 +427,7 @@ function App() {
             />
           </label>
 
-          <label className="field">
+          <label className="field field--fill">
             <span>n (СЗИ)</span>
             <input
               type="number"
@@ -470,7 +439,7 @@ function App() {
             />
           </label>
 
-          <label className="field field--wide">
+          <label className="field field--wide field--fill">
             <span>{t.method}</span>
             <select value={defuzzMethod} onChange={(event) => setDefuzzMethod(event.target.value)}>
               {defuzzOptions.map((option) => (
@@ -530,25 +499,52 @@ function App() {
           </div>
 
           <div className="field field--actions">
-            <button type="button" className="btn btn--secondary" onClick={() => { if (fileInputRef.current) { fileInputRef.current.value = ''; fileInputRef.current.click() } }}>{t.loadFile}</button>
-            <button type="button" className="btn btn--ghost" onClick={clearAll}>{t.clear}</button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/json,.json"
-              className="hidden-file-input"
-              onChange={async (event) => {
-                const file = event.target.files?.[0]
-                if (!file) return
-                try {
-                  await loadFromConfigFile(file)
-                } catch (loadError) {
-                  showToast(loadError.message)
-                  setError(loadError.message)
-                }
-              }}
-            />
-            <button type="button" className="btn btn--primary" onClick={handleSolve} disabled={loading}>{loading ? t.solving : t.solve}</button>
+            <div className="actions-main">
+              <button type="button" className="btn btn--secondary" onClick={() => { if (fileInputRef.current) { fileInputRef.current.value = ''; fileInputRef.current.click() } }}>{t.loadFile}</button>
+              <button type="button" className="btn btn--ghost" onClick={clearAll}>{t.clear}</button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/json,.json"
+                className="hidden-file-input"
+                onChange={async (event) => {
+                  const file = event.target.files?.[0]
+                  if (!file) return
+                  try {
+                    await loadFromConfigFile(file)
+                  } catch (loadError) {
+                    showToast(loadError.message)
+                    setError(loadError.message)
+                  }
+                }}
+              />
+              <button type="button" className="btn btn--primary" onClick={handleSolve} disabled={loading}>{loading ? t.solving : t.solve}</button>
+            </div>
+            <div className="actions-menu">
+              <button type="button" className="btn btn--ghost btn--menu" onClick={() => setIsMenuOpen((open) => !open)}>{t.menu}</button>
+              {isMenuOpen ? (
+                <div className="top-menu__dropdown">
+                  <label>
+                    <span>{t.theme}</span>
+                    <select value={theme} onChange={(event) => setTheme(event.target.value)}>
+                      <option value="dark">{t.dark}</option>
+                      <option value="red">{t.red}</option>
+                      <option value="green">{t.green}</option>
+                      <option value="gray">{t.gray}</option>
+                      <option value="ocean">{t.ocean}</option>
+                      <option value="violet">{t.violet}</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>{t.language}</span>
+                    <select value={language} onChange={(event) => setLanguage(event.target.value)}>
+                      <option value="ru">{t.russian}</option>
+                      <option value="en">{t.english}</option>
+                    </select>
+                  </label>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -631,21 +627,21 @@ function CostTable({ values, budgets, onCellChange, onBudgetChange }) {
     <table className="matrix-table matrix-table--full" style={{ '--matrix-rows': values.length }}>
       <thead>
         <tr>
-          <th>#</th>
-          {Array.from({ length: columns }, (_, col) => <th key={col}>{col + 1}</th>)}
-          <th>b</th>
+          <th>ГИА / СЗИ</th>
+          {Array.from({ length: columns }, (_, col) => <th key={col}>СЗИ {col + 1}</th>)}
+          <th className="budget-col">b (лимит)</th>
         </tr>
       </thead>
       <tbody>
         {values.map((row, rowIndex) => (
           <tr key={rowIndex}>
-            <th>{rowIndex + 1}</th>
+            <th>ГИА {rowIndex + 1}</th>
             {row.map((cell, colIndex) => (
               <td key={`${rowIndex}-${colIndex}`}>
                 <input type="number" step="0.001" value={cell ?? ''} onChange={(event) => onCellChange(rowIndex, colIndex, event.target.value)} />
               </td>
             ))}
-            <td>
+            <td className="budget-col">
               <input type="number" step="0.001" value={budgets[rowIndex] ?? ''} onChange={(event) => onBudgetChange(rowIndex, event.target.value)} />
             </td>
           </tr>
