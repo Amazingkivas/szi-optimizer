@@ -58,6 +58,8 @@ const UI_TEXT = {
     language: 'Язык',
     dark: 'Тёмная',
     light: 'Светлая',
+    ocean: 'Океан',
+    violet: 'Фиолетовая',
     russian: 'Русский',
     english: 'English',
     status: 'Статус',
@@ -88,6 +90,8 @@ const UI_TEXT = {
     language: 'Language',
     dark: 'Dark',
     light: 'Light',
+    ocean: 'Ocean',
+    violet: 'Violet',
     russian: 'Русский',
     english: 'English',
     status: 'Status',
@@ -168,6 +172,7 @@ function App() {
   const [assetsInput, setAssetsInput] = useState(String(initial.assets))
   const [protectionsInput, setProtectionsInput] = useState(String(initial.protections))
   const [lambdaValue, setLambdaValue] = useState(initial.lambda)
+  const [lambdaInput, setLambdaInput] = useState(String(initial.lambda))
   const [defuzzMethod, setDefuzzMethod] = useState(initial.defuzzMethod)
 
   const [cFuzzy, setCFuzzy] = useState(initial.cFuzzy)
@@ -217,6 +222,24 @@ function App() {
     }
   }
 
+  const applyLambdaValue = (rawValue) => {
+    const normalized = String(rawValue).replace(',', '.').trim()
+    if (normalized === '') {
+      setLambdaInput(String(lambdaValue))
+      return
+    }
+
+    const parsed = Number(normalized)
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+      showToast('λ должна принадлежать диапазону [0, 1].')
+      setLambdaInput(String(lambdaValue))
+      return
+    }
+
+    setLambdaValue(parsed)
+    setLambdaInput(normalized)
+  }
+
   useEffect(() => () => toastTimerRef.current && clearTimeout(toastTimerRef.current), [])
 
   useEffect(() => {
@@ -239,6 +262,10 @@ function App() {
     setIsResultOpen(false)
     setStatus(t.paramsChanged)
   }, [assets, protections, t.paramsChanged])
+
+  useEffect(() => {
+    setLambdaInput(String(lambdaValue))
+  }, [lambdaValue])
 
   const normalizeUploadedMatrix = (matrix, rowCount, colCount, label) => {
     if (!Array.isArray(matrix) || matrix.length !== rowCount) throw new Error(`Размерности в файле не соответствуют ожидаемому формату для ${label}.`)
@@ -377,6 +404,8 @@ function App() {
               <select value={theme} onChange={(event) => setTheme(event.target.value)}>
                 <option value="dark">{t.dark}</option>
                 <option value="light">{t.light}</option>
+                <option value="ocean">{t.ocean}</option>
+                <option value="violet">{t.violet}</option>
               </select>
             </label>
             <label>
@@ -425,10 +454,46 @@ function App() {
 
           <div className="field field--lambda">
             <span>λ = {lambdaValue.toFixed(2)}</span>
-            <input type="range" min="0" max="1" step="0.01" value={lambdaValue} onChange={(event) => setLambdaValue(Number(event.target.value))} />
+            <div className="lambda-inputs">
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={lambdaValue}
+                onChange={(event) => {
+                  const value = Number(event.target.value)
+                  setLambdaValue(value)
+                  setLambdaInput(String(value))
+                }}
+              />
+              <input
+                type="number"
+                min="0"
+                max="1"
+                step="0.01"
+                value={lambdaInput}
+                onChange={(event) => setLambdaInput(event.target.value)}
+                onBlur={(event) => applyLambdaValue(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    applyLambdaValue(event.currentTarget.value)
+                    event.currentTarget.blur()
+                  }
+                }}
+              />
+            </div>
             <div className="preset-row">
               {LAMBDA_PRESETS.map((preset) => (
-                <button key={preset} type="button" className={preset === lambdaValue ? 'preset preset--active' : 'preset'} onClick={() => setLambdaValue(preset)}>
+                <button
+                  key={preset}
+                  type="button"
+                  className={preset === lambdaValue ? 'preset preset--active' : 'preset'}
+                  onClick={() => {
+                    setLambdaValue(preset)
+                    setLambdaInput(String(preset))
+                  }}
+                >
                   {preset.toFixed(2)}
                 </button>
               ))}

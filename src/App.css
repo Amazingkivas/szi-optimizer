@@ -36,16 +36,42 @@ button, input, select { font: inherit; }
 }
 
 .app-screen[data-theme='light'] {
-  --bg-main: #eaf1fb;
-  --text-main: #17293f;
-  --panel-bg: rgba(255, 255, 255, 0.96);
-  --panel-border: rgba(89, 124, 187, 0.28);
-  --field-bg: rgba(237, 243, 252, 0.94);
-  --field-border: rgba(127, 154, 204, 0.36);
-  --muted-text: #4a6897;
-  --table-header: #365f9f;
-  --input-bg: #ffffff;
-  --input-color: #17325a;
+  --bg-main: #f4f7ff;
+  --text-main: #2c3d56;
+  --panel-bg: rgba(255, 255, 255, 0.9);
+  --panel-border: rgba(163, 185, 225, 0.45);
+  --field-bg: rgba(248, 251, 255, 0.96);
+  --field-border: rgba(176, 196, 230, 0.45);
+  --muted-text: #6f83a7;
+  --table-header: #4f6f9e;
+  --input-bg: #fcfdff;
+  --input-color: #334965;
+}
+
+.app-screen[data-theme='ocean'] {
+  --bg-main: #071b2d;
+  --text-main: #d7f2ff;
+  --panel-bg: rgba(10, 36, 56, 0.92);
+  --panel-border: rgba(106, 197, 235, 0.28);
+  --field-bg: rgba(8, 28, 45, 0.9);
+  --field-border: rgba(106, 197, 235, 0.24);
+  --muted-text: #8ad0ec;
+  --table-header: #8de5ff;
+  --input-bg: rgba(4, 20, 35, 0.9);
+  --input-color: #def8ff;
+}
+
+.app-screen[data-theme='violet'] {
+  --bg-main: #1b1129;
+  --text-main: #f1e8ff;
+  --panel-bg: rgba(39, 25, 60, 0.92);
+  --panel-border: rgba(203, 163, 255, 0.28);
+  --field-bg: rgba(31, 20, 48, 0.9);
+  --field-border: rgba(203, 163, 255, 0.24);
+  --muted-text: #c5a8f5;
+  --table-header: #e4cbff;
+  --input-bg: rgba(23, 14, 36, 0.9);
+  --input-color: #f6eeff;
 }
 
 .top-menu { position: absolute; top: 14px; right: 14px; z-index: 25; }
@@ -113,6 +139,11 @@ button, input, select { font: inherit; }
 }
 
 .field--actions { grid-template-columns: 1fr; }
+.lambda-inputs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px;
+  gap: 6px;
+}
 
 .btn {
   border: none;
@@ -190,17 +221,20 @@ button, input, select { font: inherit; }
 .matrix-table td {
   text-align: center;
   padding: 0;
-  font-size: 11px;
+  font-size: clamp(12px, 1.1vmin, 22px);
 }
-.matrix-table thead th { color: var(--table-header); font-weight: 600; height: 24px; }
+.matrix-table thead th { color: var(--table-header); font-weight: 600; height: 30px; }
 .matrix-table tbody th { color: var(--text-main); font-weight: 600; }
 .matrix-table input {
   height: 100%;
-  min-height: 24px;
+  min-height: 30px;
   border-radius: 0;
+  font-size: clamp(12px, 1.2vmin, 24px);
+  text-align: center;
+  font-weight: 600;
 }
 .matrix-table--full tbody tr {
-  height: calc((100% - 24px) / max(var(--matrix-rows), 1));
+  height: calc((100% - 30px) / max(var(--matrix-rows), 1));
 }
 
 .pager-controls { display: flex; align-items: center; gap: 4px; }
