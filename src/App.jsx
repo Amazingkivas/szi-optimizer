@@ -37,6 +37,21 @@ const FALLBACK_DEFUZZ = [
   { value: 'mode', label: 'Мода: b' },
 ]
 
+const DEFUZZ_LABELS = {
+  ru: {
+    centroid: 'Центроид: (a + b + c) / 3',
+    yager: 'Индекс Ягера: (a + 2b + c) / 4',
+    graded_mean: 'Интегральное среднее: (a + 4b + c) / 6',
+    mode: 'Мода: b',
+  },
+  en: {
+    centroid: 'Centroid: (a + b + c) / 3',
+    yager: 'Yager index: (a + 2b + c) / 4',
+    graded_mean: 'Graded mean: (a + 4b + c) / 6',
+    mode: 'Mode: b',
+  },
+}
+
 const UI_TEXT = {
   ru: {
     noResult: 'Результат ещё не вычислен.',
@@ -57,7 +72,9 @@ const UI_TEXT = {
     theme: 'Тема',
     language: 'Язык',
     dark: 'Тёмная',
-    light: 'Светлая',
+    red: 'Красная',
+    green: 'Зелёная',
+    gray: 'Серая',
     ocean: 'Океан',
     violet: 'Фиолетовая',
     russian: 'Русский',
@@ -89,7 +106,9 @@ const UI_TEXT = {
     theme: 'Theme',
     language: 'Language',
     dark: 'Dark',
-    light: 'Light',
+    red: 'Red',
+    green: 'Green',
+    gray: 'Gray',
     ocean: 'Ocean',
     violet: 'Violet',
     russian: 'Русский',
@@ -394,7 +413,8 @@ function App() {
     <div className="app-screen" data-theme={theme}>
       {toast ? <div className="toast">{toast}</div> : null}
 
-      <div className="top-menu">
+      <div className="top-menu-slot">
+        <div className="top-menu">
         <button type="button" className="btn btn--ghost top-menu__trigger" onClick={() => setIsMenuOpen((open) => !open)}>☰</button>
         {isMenuOpen ? (
           <div className="top-menu__dropdown">
@@ -403,7 +423,9 @@ function App() {
               <span>{t.theme}</span>
               <select value={theme} onChange={(event) => setTheme(event.target.value)}>
                 <option value="dark">{t.dark}</option>
-                <option value="light">{t.light}</option>
+                <option value="red">{t.red}</option>
+                <option value="green">{t.green}</option>
+                <option value="gray">{t.gray}</option>
                 <option value="ocean">{t.ocean}</option>
                 <option value="violet">{t.violet}</option>
               </select>
@@ -417,6 +439,7 @@ function App() {
             </label>
           </div>
         ) : null}
+        </div>
       </div>
 
       <section className="panel config-panel">
@@ -448,7 +471,11 @@ function App() {
           <label className="field field--wide">
             <span>{t.method}</span>
             <select value={defuzzMethod} onChange={(event) => setDefuzzMethod(event.target.value)}>
-              {defuzzOptions.map((option) => (<option key={option.value} value={option.value}>{option.label}</option>))}
+              {defuzzOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {DEFUZZ_LABELS[language][option.value] ?? option.label}
+                </option>
+              ))}
             </select>
           </label>
 
