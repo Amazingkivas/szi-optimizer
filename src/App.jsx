@@ -413,36 +413,38 @@ function App() {
     <div className="app-screen" data-theme={theme}>
       {toast ? <div className="toast">{toast}</div> : null}
 
-      <div className="top-menu-slot">
-        <div className="top-menu">
-        <button type="button" className="btn btn--ghost top-menu__trigger" onClick={() => setIsMenuOpen((open) => !open)}>☰</button>
-        {isMenuOpen ? (
-          <div className="top-menu__dropdown">
-            <strong>{t.menu}</strong>
-            <label>
-              <span>{t.theme}</span>
-              <select value={theme} onChange={(event) => setTheme(event.target.value)}>
-                <option value="dark">{t.dark}</option>
-                <option value="red">{t.red}</option>
-                <option value="green">{t.green}</option>
-                <option value="gray">{t.gray}</option>
-                <option value="ocean">{t.ocean}</option>
-                <option value="violet">{t.violet}</option>
-              </select>
-            </label>
-            <label>
-              <span>{t.language}</span>
-              <select value={language} onChange={(event) => setLanguage(event.target.value)}>
-                <option value="ru">{t.russian}</option>
-                <option value="en">{t.english}</option>
-              </select>
-            </label>
-          </div>
-        ) : null}
-        </div>
-      </div>
-
       <section className="panel config-panel">
+        <div className="menu-row">
+          <div className="top-menu-slot">
+            <div className="top-menu">
+              <button type="button" className="btn btn--ghost top-menu__trigger" onClick={() => setIsMenuOpen((open) => !open)}>☰</button>
+              {isMenuOpen ? (
+                <div className="top-menu__dropdown">
+                  <strong>{t.menu}</strong>
+                  <label>
+                    <span>{t.theme}</span>
+                    <select value={theme} onChange={(event) => setTheme(event.target.value)}>
+                      <option value="dark">{t.dark}</option>
+                      <option value="red">{t.red}</option>
+                      <option value="green">{t.green}</option>
+                      <option value="gray">{t.gray}</option>
+                      <option value="ocean">{t.ocean}</option>
+                      <option value="violet">{t.violet}</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>{t.language}</span>
+                    <select value={language} onChange={(event) => setLanguage(event.target.value)}>
+                      <option value="ru">{t.russian}</option>
+                      <option value="en">{t.english}</option>
+                    </select>
+                  </label>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
         <div className="controls-row">
           <label className="field">
             <span>m (ГИА)</span>
