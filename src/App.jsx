@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
 const EXAMPLE = {
@@ -31,7 +31,7 @@ const EXAMPLE = {
 const LAMBDA_PRESETS = [0, 0.25, 0.5, 0.75, 1]
 const TRI_ROWS_PER_PAGE = 8
 const COST_ROWS_PER_PAGE = 8
-const COST_COLS_PER_PAGE = 6
+const COST_COLS_PER_PAGE = 7
 
 const FALLBACK_DEFUZZ = [
   { value: 'centroid', label: 'Центроид: (a + b + c) / 3' },
@@ -39,6 +39,67 @@ const FALLBACK_DEFUZZ = [
   { value: 'graded_mean', label: 'Интегральное среднее: (a + 4b + c) / 6' },
   { value: 'mode', label: 'Мода: b' },
 ]
+
+const UI_TEXT = {
+  ru: {
+    resultTitle: 'Результаты',
+    waiting: 'Ожидание расчёта.',
+    noResult: 'Результат ещё не вычислен.',
+    paramsChanged: 'Параметры изменены. Выполните новый расчёт.',
+    loaded: 'Данные из файла успешно загружены.',
+    cleared: 'Поля очищены.',
+    calculating: 'Вычисление...',
+    done: 'Расчёт завершён.',
+    failed: 'Ошибка расчёта.',
+    solve: 'Рассчитать',
+    solving: 'Считаю...',
+    loadFile: 'Загрузить файл',
+    clear: 'Очистить',
+    method: 'Метод дефаззификации',
+    pageC: 'Страница c̃j',
+    pageD: 'Страница d̃j',
+    rowsA: 'Строки матрицы A',
+    colsA: 'Столбцы матрицы A',
+    selected: 'Выбранные СЗИ:',
+    noSelected: 'нет выбранных СЗИ',
+    menu: 'Настройки',
+    theme: 'Тема',
+    language: 'Язык',
+    dark: 'Тёмная',
+    light: 'Светлая',
+    russian: 'Русский',
+    english: 'English',
+  },
+  en: {
+    resultTitle: 'Results',
+    waiting: 'Awaiting calculation.',
+    noResult: 'No calculation result yet.',
+    paramsChanged: 'Parameters changed. Run calculation again.',
+    loaded: 'Data loaded from file.',
+    cleared: 'Fields were cleared.',
+    calculating: 'Calculating...',
+    done: 'Calculation finished.',
+    failed: 'Calculation failed.',
+    solve: 'Calculate',
+    solving: 'Calculating...',
+    loadFile: 'Load file',
+    clear: 'Clear',
+    method: 'Defuzzification method',
+    pageC: 'c̃j page',
+    pageD: 'd̃j page',
+    rowsA: 'A matrix rows',
+    colsA: 'A matrix cols',
+    selected: 'Selected controls:',
+    noSelected: 'none',
+    menu: 'Settings',
+    theme: 'Theme',
+    language: 'Language',
+    dark: 'Dark',
+    light: 'Light',
+    russian: 'Русский',
+    english: 'English',
+  },
+}
 
 const createMatrix = (rows, columns, fill = '') =>
   Array.from({ length: rows }, () => Array.from({ length: columns }, () => fill))
@@ -129,14 +190,19 @@ function App() {
   const [budgets, setBudgets] = useState(initial.budgets)
 
   const [defuzzOptions, setDefuzzOptions] = useState(FALLBACK_DEFUZZ)
-  const [triPage, setTriPage] = useState(0)
+  const [cPage, setCPage] = useState(0)
+  const [dPage, setDPage] = useState(0)
   const [costRowPage, setCostRowPage] = useState(0)
   const [costColPage, setCostColPage] = useState(0)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
-  const [status, setStatus] = useState('Результат ещё не вычислен.')
+  const [language, setLanguage] = useState('ru')
+  const [theme, setTheme] = useState('dark')
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const t = UI_TEXT[language]
+  const [status, setStatus] = useState(UI_TEXT.ru.noResult)
   const [result, setResult] = useState(null)
 
   const showToast = (message) => {
@@ -194,27 +260,29 @@ function App() {
     setCosts((current) => resizeCosts(current, assets, protections))
     setBudgets((current) => resizeVector(current, assets))
     setResult(null)
-    setStatus('Параметры изменены. Выполните новый расчёт.')
-  }, [assets, protections])
+    setStatus(t.paramsChanged)
+  }, [assets, protections, t.paramsChanged])
 
   const triTotalPages = Math.max(1, Math.ceil(protections / TRI_ROWS_PER_PAGE))
   const rowTotalPages = Math.max(1, Math.ceil(assets / COST_ROWS_PER_PAGE))
   const colTotalPages = Math.max(1, Math.ceil(protections / COST_COLS_PER_PAGE))
 
   useEffect(() => {
-    setTriPage((page) => clampPage(page, triTotalPages))
+    setCPage((page) => clampPage(page, triTotalPages))
+    setDPage((page) => clampPage(page, triTotalPages))
     setCostRowPage((page) => clampPage(page, rowTotalPages))
     setCostColPage((page) => clampPage(page, colTotalPages))
   }, [triTotalPages, rowTotalPages, colTotalPages])
 
-  const triStart = triPage * TRI_ROWS_PER_PAGE
-  const triEnd = Math.min(protections, triStart + TRI_ROWS_PER_PAGE)
+  const cStart = cPage * TRI_ROWS_PER_PAGE
+  const cEnd = Math.min(protections, cStart + TRI_ROWS_PER_PAGE)
+  const dStart = dPage * TRI_ROWS_PER_PAGE
+  const dEnd = Math.min(protections, dStart + TRI_ROWS_PER_PAGE)
 
   const costRowStart = costRowPage * COST_ROWS_PER_PAGE
   const costRowEnd = Math.min(assets, costRowStart + COST_ROWS_PER_PAGE)
   const costColStart = costColPage * COST_COLS_PER_PAGE
   const costColEnd = Math.min(protections, costColStart + COST_COLS_PER_PAGE)
-
 
   const normalizeUploadedMatrix = (matrix, rowCount, colCount, label) => {
     if (!Array.isArray(matrix) || matrix.length !== rowCount) {
@@ -273,12 +341,13 @@ function App() {
     setDFuzzy(dUploaded)
     setCosts(costsUploaded)
     setBudgets(config.budgets.map((value) => String(value)))
-    setTriPage(0)
+    setCPage(0)
+    setDPage(0)
     setCostRowPage(0)
     setCostColPage(0)
     setError('')
     setResult(null)
-    setStatus('Данные из файла успешно загружены.')
+    setStatus(t.loaded)
   }
 
   const handleLoadFileClick = () => {
@@ -306,7 +375,7 @@ function App() {
     setBudgets(createVector(assets))
     setError('')
     setResult(null)
-    setStatus('Поля очищены.')
+    setStatus(t.cleared)
   }
 
   const updateTriCell = (setter, matrix, rowIndex, columnIndex, value) => {
@@ -326,55 +395,6 @@ function App() {
     next[rowIndex] = value
     setBudgets(next)
   }
-
-  const displayedSolution = result?.solution_original ?? Array.from({ length: protections }, () => 0)
-  const visualRef = useRef(null)
-  const [gridShape, setGridShape] = useState({ cols: 1, rows: 1 })
-
-  const recalcGridShape = useCallback(() => {
-    const node = visualRef.current
-    const n = Math.max(1, displayedSolution.length)
-    if (!node) {
-      setGridShape({ cols: Math.ceil(Math.sqrt(n)), rows: Math.ceil(n / Math.ceil(Math.sqrt(n))) })
-      return
-    }
-
-    const width = Math.max(1, node.clientWidth)
-    const height = Math.max(1, node.clientHeight)
-
-    let bestCols = 1
-    let bestRows = n
-    let bestScore = Number.POSITIVE_INFINITY
-    let bestArea = 0
-
-    for (let cols = 1; cols <= n; cols += 1) {
-      const rows = Math.ceil(n / cols)
-      const cellW = width / cols
-      const cellH = height / rows
-      const ratioPenalty = Math.abs(Math.log(cellW / Math.max(cellH, 1e-6)))
-      const area = cellW * cellH
-
-      if (ratioPenalty < bestScore - 1e-6 || (Math.abs(ratioPenalty - bestScore) <= 1e-6 && area > bestArea)) {
-        bestScore = ratioPenalty
-        bestArea = area
-        bestCols = cols
-        bestRows = rows
-      }
-    }
-
-    setGridShape({ cols: bestCols, rows: bestRows })
-  }, [displayedSolution.length])
-
-  useEffect(() => {
-    recalcGridShape()
-    const node = visualRef.current
-    if (!node || typeof ResizeObserver === 'undefined') return
-
-    const observer = new ResizeObserver(() => recalcGridShape())
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [recalcGridShape])
-
 
   const validateClientData = (payload) => {
     const checkTriangular = (rows) => {
@@ -414,7 +434,7 @@ function App() {
     try {
       setLoading(true)
       setError('')
-      setStatus('Вычисление...')
+      setStatus(t.calculating)
       setToast('')
 
       const payload = {
@@ -441,19 +461,44 @@ function App() {
       }
 
       setResult(data)
-      setStatus('Расчёт завершён.')
+      setStatus(t.done)
     } catch (solveError) {
       showToast(solveError.message)
       setError(solveError.message)
-      setStatus('Ошибка расчёта.')
+      setStatus(t.failed)
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="app-screen">
+    <div className="app-screen" data-theme={theme}>
       {toast ? <div className="toast">{toast}</div> : null}
+
+      <div className="top-menu">
+        <button type="button" className="btn btn--ghost top-menu__trigger" onClick={() => setIsMenuOpen((open) => !open)}>
+          ☰
+        </button>
+        {isMenuOpen ? (
+          <div className="top-menu__dropdown">
+            <strong>{t.menu}</strong>
+            <label>
+              <span>{t.theme}</span>
+              <select value={theme} onChange={(event) => setTheme(event.target.value)}>
+                <option value="dark">{t.dark}</option>
+                <option value="light">{t.light}</option>
+              </select>
+            </label>
+            <label>
+              <span>{t.language}</span>
+              <select value={language} onChange={(event) => setLanguage(event.target.value)}>
+                <option value="ru">{t.russian}</option>
+                <option value="en">{t.english}</option>
+              </select>
+            </label>
+          </div>
+        ) : null}
+      </div>
 
       <section className="panel config-panel">
         <div className="controls-row">
@@ -492,7 +537,7 @@ function App() {
           </label>
 
           <label className="field field--wide">
-            <span>Метод дефаззификации</span>
+            <span>{t.method}</span>
             <select value={defuzzMethod} onChange={(event) => setDefuzzMethod(event.target.value)}>
               {defuzzOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -528,10 +573,10 @@ function App() {
 
           <div className="field field--actions">
             <button type="button" className="btn btn--secondary" onClick={handleLoadFileClick}>
-              Загрузить файл
+              {t.loadFile}
             </button>
             <button type="button" className="btn btn--ghost" onClick={clearAll}>
-              Очистить
+              {t.clear}
             </button>
             <input
               ref={fileInputRef}
@@ -541,38 +586,50 @@ function App() {
               onChange={handleConfigFileChange}
             />
             <button type="button" className="btn btn--primary" onClick={handleSolve} disabled={loading}>
-              {loading ? 'Считаю...' : 'Рассчитать'}
+              {loading ? t.solving : t.solve}
             </button>
           </div>
         </div>
 
         <div className="tables-row">
           <div className="table-block">
-            <TableTitle title="c̃j" subtitle={`${triStart + 1}-${triEnd} из ${protections}`} />
+            <TableTitle title="c̃j" subtitle={`${cStart + 1}-${cEnd} / ${protections}`} />
             <TriangularTable
-              rowPrefix="СЗИ"
-              start={triStart}
-              end={triEnd}
+              start={cStart}
+              end={cEnd}
               values={cFuzzy}
               onChange={(rowIndex, colIndex, value) => updateTriCell(setCFuzzy, cFuzzy, rowIndex, colIndex, value)}
+            />
+            <Pager
+              label={t.pageC}
+              page={cPage}
+              total={triTotalPages}
+              onPrev={() => setCPage((page) => clampPage(page - 1, triTotalPages))}
+              onNext={() => setCPage((page) => clampPage(page + 1, triTotalPages))}
             />
           </div>
 
           <div className="table-block">
-            <TableTitle title="d̃j" subtitle={`${triStart + 1}-${triEnd} из ${protections}`} />
+            <TableTitle title="d̃j" subtitle={`${dStart + 1}-${dEnd} / ${protections}`} />
             <TriangularTable
-              rowPrefix="СЗИ"
-              start={triStart}
-              end={triEnd}
+              start={dStart}
+              end={dEnd}
               values={dFuzzy}
               onChange={(rowIndex, colIndex, value) => updateTriCell(setDFuzzy, dFuzzy, rowIndex, colIndex, value)}
+            />
+            <Pager
+              label={t.pageD}
+              page={dPage}
+              total={triTotalPages}
+              onPrev={() => setDPage((page) => clampPage(page - 1, triTotalPages))}
+              onNext={() => setDPage((page) => clampPage(page + 1, triTotalPages))}
             />
           </div>
 
           <div className="table-block table-block--wide">
             <TableTitle
               title="A и b"
-              subtitle={`строки ${costRowStart + 1}-${costRowEnd}/${assets}, столбцы ${costColStart + 1}-${costColEnd}/${protections}`}
+              subtitle={`${costRowStart + 1}-${costRowEnd} / ${assets}, ${costColStart + 1}-${costColEnd} / ${protections}`}
             />
             <CostTable
               rowStart={costRowStart}
@@ -589,21 +646,14 @@ function App() {
 
         <div className="pagers-row">
           <Pager
-            label="Страницы c̃j/d̃j"
-            page={triPage}
-            total={triTotalPages}
-            onPrev={() => setTriPage((page) => clampPage(page - 1, triTotalPages))}
-            onNext={() => setTriPage((page) => clampPage(page + 1, triTotalPages))}
-          />
-          <Pager
-            label="Строки матрицы A"
+            label={t.rowsA}
             page={costRowPage}
             total={rowTotalPages}
             onPrev={() => setCostRowPage((page) => clampPage(page - 1, rowTotalPages))}
             onNext={() => setCostRowPage((page) => clampPage(page + 1, rowTotalPages))}
           />
           <Pager
-            label="Столбцы матрицы A"
+            label={t.colsA}
             page={costColPage}
             total={colTotalPages}
             onPrev={() => setCostColPage((page) => clampPage(page - 1, colTotalPages))}
@@ -613,26 +663,18 @@ function App() {
       </section>
 
       <section className="panel result-panel">
-        <h2>Результаты</h2>
+        <h2>{t.resultTitle}</h2>
         <div className="status-box">{status}</div>
 
         {result ? (
           <div className="result-solution">
             <div><strong>x*</strong> = ({result.solution_original.join(', ')})</div>
-            <div><strong>Выбранные СЗИ:</strong> {result.selected_original_indices.length ? result.selected_original_indices.join(', ') : 'нет выбранных СЗИ'}</div>
+            <div><strong>{t.selected}</strong> {result.selected_original_indices.length ? result.selected_original_indices.join(', ') : t.noSelected}</div>
             <div><strong>F(x*) =</strong> {formatValue(result.objective, 6)}</div>
           </div>
         ) : (
-          <div className="result-empty">Ожидание расчёта.</div>
+          <div className="result-empty">{t.waiting}</div>
         )}
-
-        <div className="szi-visual" ref={visualRef} style={{ '--szi-cols': gridShape.cols, '--szi-rows': gridShape.rows }}>
-          {displayedSolution.map((value, index) => (
-            <div key={index} className={value === 1 ? 'szi-tile szi-tile--selected' : 'szi-tile'} title={`СЗИ ${index + 1}: ${value === 1 ? 'выбрано' : 'не выбрано'}`}>
-              {index + 1}
-            </div>
-          ))}
-        </div>
 
         {error ? <div className="error-box">{error}</div> : null}
       </section>
@@ -649,12 +691,12 @@ function TableTitle({ title, subtitle }) {
   )
 }
 
-function TriangularTable({ rowPrefix, start, end, values, onChange }) {
+function TriangularTable({ start, end, values, onChange }) {
   return (
     <table className="matrix-table">
       <thead>
         <tr>
-          <th>{rowPrefix}</th>
+          <th>#</th>
           <th>a</th>
           <th>b</th>
           <th>c</th>
@@ -665,7 +707,7 @@ function TriangularTable({ rowPrefix, start, end, values, onChange }) {
           const rowIndex = start + offset
           return (
             <tr key={rowIndex}>
-              <th>{rowPrefix} {rowIndex + 1}</th>
+              <th>{rowIndex + 1}</th>
               {[0, 1, 2].map((col) => (
                 <td key={col}>
                   <input
@@ -691,9 +733,9 @@ function CostTable({ rowStart, rowEnd, colStart, colEnd, values, budgets, onCell
     <table className="matrix-table">
       <thead>
         <tr>
-          <th>ГИА</th>
+          <th>#</th>
           {columnIndices.map((colIndex) => (
-            <th key={colIndex}>СЗИ {colIndex + 1}</th>
+            <th key={colIndex}>{colIndex + 1}</th>
           ))}
           <th>b</th>
         </tr>
@@ -703,7 +745,7 @@ function CostTable({ rowStart, rowEnd, colStart, colEnd, values, budgets, onCell
           const rowIndex = rowStart + offset
           return (
             <tr key={rowIndex}>
-              <th>ГИА {rowIndex + 1}</th>
+              <th>{rowIndex + 1}</th>
               {columnIndices.map((colIndex) => (
                 <td key={`${rowIndex}-${colIndex}`}>
                   <input
