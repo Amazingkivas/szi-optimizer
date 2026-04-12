@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
 const EXAMPLE = {
@@ -29,9 +29,6 @@ const EXAMPLE = {
 }
 
 const LAMBDA_PRESETS = [0, 0.25, 0.5, 0.75, 1]
-const TRI_ROWS_PER_PAGE = 8
-const COST_ROWS_PER_PAGE = 8
-const COST_COLS_PER_PAGE = 6
 
 const FALLBACK_DEFUZZ = [
   { value: 'centroid', label: 'Центроид: (a + b + c) / 3' },
@@ -39,6 +36,92 @@ const FALLBACK_DEFUZZ = [
   { value: 'graded_mean', label: 'Интегральное среднее: (a + 4b + c) / 6' },
   { value: 'mode', label: 'Мода: b' },
 ]
+
+const DEFUZZ_LABELS = {
+  ru: {
+    centroid: 'Центроид: (a + b + c) / 3',
+    yager: 'Индекс Ягера: (a + 2b + c) / 4',
+    graded_mean: 'Интегральное среднее: (a + 4b + c) / 6',
+    mode: 'Мода: b',
+  },
+  en: {
+    centroid: 'Centroid: (a + b + c) / 3',
+    yager: 'Yager index: (a + 2b + c) / 4',
+    graded_mean: 'Graded mean: (a + 4b + c) / 6',
+    mode: 'Mode: b',
+  },
+}
+
+const UI_TEXT = {
+  ru: {
+    noResult: 'Результат ещё не вычислен.',
+    paramsChanged: 'Параметры изменены. Выполните новый расчёт.',
+    loaded: 'Данные из файла успешно загружены.',
+    cleared: 'Поля очищены.',
+    calculating: 'Вычисление...',
+    done: 'Расчёт завершён.',
+    failed: 'Ошибка расчёта.',
+    solve: 'Рассчитать',
+    solving: 'Считаю...',
+    loadFile: 'Загрузить файл',
+    clear: 'Очистить',
+    method: 'Метод дефаззификации',
+    selected: 'Выбранные СЗИ:',
+    noSelected: 'нет выбранных СЗИ',
+    menu: 'Настройки',
+    theme: 'Тема',
+    language: 'Язык',
+    dark: 'Тёмная',
+    red: 'Красная',
+    green: 'Зелёная',
+    gray: 'Серая',
+    ocean: 'Океан',
+    violet: 'Фиолетовая',
+    russian: 'Русский',
+    english: 'English',
+    status: 'Статус',
+    cSet: 'Набор c̃',
+    dSet: 'Набор d̃',
+    resultTitle: 'Результаты расчёта',
+    close: 'Закрыть',
+    cCrisp: 'Чёткие c',
+    dCrisp: 'Чёткие d',
+  },
+  en: {
+    noResult: 'No calculation result yet.',
+    paramsChanged: 'Parameters changed. Run calculation again.',
+    loaded: 'Data loaded from file.',
+    cleared: 'Fields were cleared.',
+    calculating: 'Calculating...',
+    done: 'Calculation finished.',
+    failed: 'Calculation failed.',
+    solve: 'Calculate',
+    solving: 'Calculating...',
+    loadFile: 'Load file',
+    clear: 'Clear',
+    method: 'Defuzzification method',
+    selected: 'Selected controls:',
+    noSelected: 'none',
+    menu: 'Settings',
+    theme: 'Theme',
+    language: 'Language',
+    dark: 'Dark',
+    red: 'Red',
+    green: 'Green',
+    gray: 'Gray',
+    ocean: 'Ocean',
+    violet: 'Violet',
+    russian: 'Русский',
+    english: 'English',
+    status: 'Status',
+    cSet: 'c̃ set',
+    dSet: 'd̃ set',
+    resultTitle: 'Calculation results',
+    close: 'Close',
+    cCrisp: 'Crisp c',
+    dCrisp: 'Crisp d',
+  },
+}
 
 const createMatrix = (rows, columns, fill = '') =>
   Array.from({ length: rows }, () => Array.from({ length: columns }, () => fill))
@@ -85,25 +168,12 @@ function resizeVector(vector, size) {
 }
 
 function parseNumber(value) {
-  if (value === '' || value === null || value === undefined) {
-    throw new Error('Обнаружены пустые поля. Заполните все значения.')
-  }
-
+  if (value === '' || value === null || value === undefined) throw new Error('Обнаружены пустые поля. Заполните все значения.')
   const raw = typeof value === 'string' ? value.trim() : String(value)
-  if (raw === '') {
-    throw new Error('Обнаружены пустые поля. Заполните все значения.')
-  }
-
+  if (raw === '') throw new Error('Обнаружены пустые поля. Заполните все значения.')
   const parsed = Number(raw)
-  if (!Number.isFinite(parsed)) {
-    throw new Error('Есть некорректные числовые значения. Проверьте ввод.')
-  }
+  if (!Number.isFinite(parsed)) throw new Error('Есть некорректные числовые значения. Проверьте ввод.')
   return parsed
-}
-
-function clampPage(page, totalPages) {
-  if (totalPages <= 0) return 0
-  return Math.max(0, Math.min(page, totalPages - 1))
 }
 
 function formatValue(value, precision = 3) {
@@ -121,6 +191,7 @@ function App() {
   const [assetsInput, setAssetsInput] = useState(String(initial.assets))
   const [protectionsInput, setProtectionsInput] = useState(String(initial.protections))
   const [lambdaValue, setLambdaValue] = useState(initial.lambda)
+  const [lambdaInput, setLambdaInput] = useState(String(initial.lambda))
   const [defuzzMethod, setDefuzzMethod] = useState(initial.defuzzMethod)
 
   const [cFuzzy, setCFuzzy] = useState(initial.cFuzzy)
@@ -129,21 +200,23 @@ function App() {
   const [budgets, setBudgets] = useState(initial.budgets)
 
   const [defuzzOptions, setDefuzzOptions] = useState(FALLBACK_DEFUZZ)
-  const [triPage, setTriPage] = useState(0)
-  const [costRowPage, setCostRowPage] = useState(0)
-  const [costColPage, setCostColPage] = useState(0)
+  const [cIndex, setCIndex] = useState(0)
+  const [dIndex, setDIndex] = useState(0)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
-  const [status, setStatus] = useState('Результат ещё не вычислен.')
+  const [language, setLanguage] = useState('ru')
+  const [theme, setTheme] = useState('dark')
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const t = UI_TEXT[language]
+  const [status, setStatus] = useState(UI_TEXT.ru.noResult)
   const [result, setResult] = useState(null)
+  const [isResultOpen, setIsResultOpen] = useState(false)
 
   const showToast = (message) => {
     setToast(message)
-    if (toastTimerRef.current) {
-      clearTimeout(toastTimerRef.current)
-    }
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     toastTimerRef.current = setTimeout(() => {
       setToast('')
       toastTimerRef.current = null
@@ -158,7 +231,6 @@ function App() {
       if (field === 'n') setProtectionsInput(String(protections))
       return
     }
-
     if (field === 'm') {
       setAssets(parsed)
       setAssetsInput(String(parsed))
@@ -169,23 +241,33 @@ function App() {
     }
   }
 
-  useEffect(() => {
-    return () => {
-      if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+  const applyLambdaValue = (rawValue) => {
+    const normalized = String(rawValue).replace(',', '.').trim()
+    if (normalized === '') {
+      setLambdaInput(String(lambdaValue))
+      return
     }
-  }, [])
+
+    const parsed = Number(normalized)
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+      showToast('λ должна принадлежать диапазону [0, 1].')
+      setLambdaInput(String(lambdaValue))
+      return
+    }
+
+    setLambdaValue(parsed)
+    setLambdaInput(normalized)
+  }
+
+  useEffect(() => () => toastTimerRef.current && clearTimeout(toastTimerRef.current), [])
 
   useEffect(() => {
     fetch('/api/meta')
       .then((response) => response.json())
       .then((data) => {
-        if (Array.isArray(data.defuzz_methods) && data.defuzz_methods.length) {
-          setDefuzzOptions(data.defuzz_methods)
-        }
+        if (Array.isArray(data.defuzz_methods) && data.defuzz_methods.length) setDefuzzOptions(data.defuzz_methods)
       })
-      .catch(() => {
-        setDefuzzOptions(FALLBACK_DEFUZZ)
-      })
+      .catch(() => setDefuzzOptions(FALLBACK_DEFUZZ))
   }, [])
 
   useEffect(() => {
@@ -193,38 +275,21 @@ function App() {
     setDFuzzy((current) => resizeTriangular(current, protections))
     setCosts((current) => resizeCosts(current, assets, protections))
     setBudgets((current) => resizeVector(current, assets))
+    setCIndex((index) => Math.max(0, Math.min(index, protections - 1)))
+    setDIndex((index) => Math.max(0, Math.min(index, protections - 1)))
     setResult(null)
-    setStatus('Параметры изменены. Выполните новый расчёт.')
-  }, [assets, protections])
-
-  const triTotalPages = Math.max(1, Math.ceil(protections / TRI_ROWS_PER_PAGE))
-  const rowTotalPages = Math.max(1, Math.ceil(assets / COST_ROWS_PER_PAGE))
-  const colTotalPages = Math.max(1, Math.ceil(protections / COST_COLS_PER_PAGE))
+    setIsResultOpen(false)
+    setStatus(t.paramsChanged)
+  }, [assets, protections, t.paramsChanged])
 
   useEffect(() => {
-    setTriPage((page) => clampPage(page, triTotalPages))
-    setCostRowPage((page) => clampPage(page, rowTotalPages))
-    setCostColPage((page) => clampPage(page, colTotalPages))
-  }, [triTotalPages, rowTotalPages, colTotalPages])
-
-  const triStart = triPage * TRI_ROWS_PER_PAGE
-  const triEnd = Math.min(protections, triStart + TRI_ROWS_PER_PAGE)
-
-  const costRowStart = costRowPage * COST_ROWS_PER_PAGE
-  const costRowEnd = Math.min(assets, costRowStart + COST_ROWS_PER_PAGE)
-  const costColStart = costColPage * COST_COLS_PER_PAGE
-  const costColEnd = Math.min(protections, costColStart + COST_COLS_PER_PAGE)
-
+    setLambdaInput(String(lambdaValue))
+  }, [lambdaValue])
 
   const normalizeUploadedMatrix = (matrix, rowCount, colCount, label) => {
-    if (!Array.isArray(matrix) || matrix.length !== rowCount) {
-      throw new Error(`Размерности в файле не соответствуют ожидаемому формату для ${label}.`)
-    }
-
+    if (!Array.isArray(matrix) || matrix.length !== rowCount) throw new Error(`Размерности в файле не соответствуют ожидаемому формату для ${label}.`)
     return matrix.map((row) => {
-      if (!Array.isArray(row) || row.length !== colCount) {
-        throw new Error(`Размерности в файле не соответствуют ожидаемому формату для ${label}.`)
-      }
+      if (!Array.isArray(row) || row.length !== colCount) throw new Error(`Размерности в файле не соответствуют ожидаемому формату для ${label}.`)
       return row.map((value) => String(value))
     })
   }
@@ -248,20 +313,14 @@ function App() {
     const dUploaded = normalizeUploadedMatrix(config.dFuzzy, nextProtections, 3, 'd̃')
     const costsUploaded = normalizeUploadedMatrix(config.costs, nextAssets, nextProtections, 'A')
 
-    if (!Array.isArray(config.budgets) || config.budgets.length !== nextAssets) {
-      throw new Error('Размерности в файле не соответствуют ожидаемому формату для b.')
-    }
+    if (!Array.isArray(config.budgets) || config.budgets.length !== nextAssets) throw new Error('Размерности в файле не соответствуют ожидаемому формату для b.')
 
     const lambdaUploaded = Number(config.lambda)
-    if (!Number.isFinite(lambdaUploaded) || lambdaUploaded < 0 || lambdaUploaded > 1) {
-      throw new Error('В файле должно быть корректное значение λ в диапазоне [0, 1].')
-    }
+    if (!Number.isFinite(lambdaUploaded) || lambdaUploaded < 0 || lambdaUploaded > 1) throw new Error('В файле должно быть корректное значение λ в диапазоне [0, 1].')
 
     const methodUploaded = String(config.defuzzMethod)
     const methodExists = defuzzOptions.some((option) => option.value === methodUploaded)
-    if (!methodExists) {
-      throw new Error('Метод дефаззификации в файле не поддерживается.')
-    }
+    if (!methodExists) throw new Error('Метод дефаззификации в файле не поддерживается.')
 
     setAssets(nextAssets)
     setProtections(nextProtections)
@@ -273,30 +332,12 @@ function App() {
     setDFuzzy(dUploaded)
     setCosts(costsUploaded)
     setBudgets(config.budgets.map((value) => String(value)))
-    setTriPage(0)
-    setCostRowPage(0)
-    setCostColPage(0)
+    setCIndex(0)
+    setDIndex(0)
     setError('')
     setResult(null)
-    setStatus('Данные из файла успешно загружены.')
-  }
-
-  const handleLoadFileClick = () => {
-    if (!fileInputRef.current) return
-    fileInputRef.current.value = ''
-    fileInputRef.current.click()
-  }
-
-  const handleConfigFileChange = async (event) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    try {
-      await loadFromConfigFile(file)
-    } catch (loadError) {
-      showToast(loadError.message)
-      setError(loadError.message)
-    }
+    setIsResultOpen(false)
+    setStatus(t.loaded)
   }
 
   const clearAll = () => {
@@ -306,7 +347,48 @@ function App() {
     setBudgets(createVector(assets))
     setError('')
     setResult(null)
-    setStatus('Поля очищены.')
+    setIsResultOpen(false)
+    setStatus(t.cleared)
+  }
+
+  const handleSolve = async () => {
+    try {
+      setLoading(true)
+      setError('')
+      setStatus(t.calculating)
+      setToast('')
+
+      const payload = {
+        lambda: lambdaValue,
+        defuzz_method: defuzzMethod,
+        c_fuzzy: cFuzzy.map((row) => row.map((value) => parseNumber(value))),
+        d_fuzzy: dFuzzy.map((row) => row.map((value) => parseNumber(value))),
+        cost_matrix: costs.map((row) => row.map((value) => parseNumber(value))),
+        budgets: budgets.map((value) => parseNumber(value)),
+      }
+
+      const response = await fetch('/api/solve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        const message = data.error || 'Сервер не смог решить задачу.'
+        showToast(message)
+        throw new Error(message)
+      }
+
+      setResult(data)
+      setIsResultOpen(true)
+      setStatus(t.done)
+    } catch (solveError) {
+      showToast(solveError.message)
+      setError(solveError.message)
+      setStatus(t.failed)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const updateTriCell = (setter, matrix, rowIndex, columnIndex, value) => {
@@ -327,137 +409,13 @@ function App() {
     setBudgets(next)
   }
 
-  const displayedSolution = result?.solution_original ?? Array.from({ length: protections }, () => 0)
-  const visualRef = useRef(null)
-  const [gridShape, setGridShape] = useState({ cols: 1, rows: 1 })
-
-  const recalcGridShape = useCallback(() => {
-    const node = visualRef.current
-    const n = Math.max(1, displayedSolution.length)
-    if (!node) {
-      setGridShape({ cols: Math.ceil(Math.sqrt(n)), rows: Math.ceil(n / Math.ceil(Math.sqrt(n))) })
-      return
-    }
-
-    const width = Math.max(1, node.clientWidth)
-    const height = Math.max(1, node.clientHeight)
-
-    let bestCols = 1
-    let bestRows = n
-    let bestScore = Number.POSITIVE_INFINITY
-    let bestArea = 0
-
-    for (let cols = 1; cols <= n; cols += 1) {
-      const rows = Math.ceil(n / cols)
-      const cellW = width / cols
-      const cellH = height / rows
-      const ratioPenalty = Math.abs(Math.log(cellW / Math.max(cellH, 1e-6)))
-      const area = cellW * cellH
-
-      if (ratioPenalty < bestScore - 1e-6 || (Math.abs(ratioPenalty - bestScore) <= 1e-6 && area > bestArea)) {
-        bestScore = ratioPenalty
-        bestArea = area
-        bestCols = cols
-        bestRows = rows
-      }
-    }
-
-    setGridShape({ cols: bestCols, rows: bestRows })
-  }, [displayedSolution.length])
-
-  useEffect(() => {
-    recalcGridShape()
-    const node = visualRef.current
-    if (!node || typeof ResizeObserver === 'undefined') return
-
-    const observer = new ResizeObserver(() => recalcGridShape())
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [recalcGridShape])
-
-
-  const validateClientData = (payload) => {
-    const checkTriangular = (rows) => {
-      rows.forEach((row) => {
-        if (!(row[0] <= row[1] && row[1] <= row[2])) {
-          throw new Error('Для нечётких параметров должно выполняться условие a ≤ b ≤ c.')
-        }
-      })
-    }
-
-    checkTriangular(payload.c_fuzzy)
-    checkTriangular(payload.d_fuzzy)
-
-    payload.cost_matrix.forEach((row) => {
-      row.forEach((value) => {
-        if (value < 0) {
-          throw new Error('Матрица A должна содержать только неотрицательные значения.')
-        }
-      })
-    })
-
-    payload.budgets.forEach((value) => {
-      if (value < 0) {
-        throw new Error('Вектор b должен содержать только неотрицательные значения.')
-      }
-    })
-
-    payload.cost_matrix.forEach((row, rowIndex) => {
-      const rowMax = Math.max(...row)
-      if (rowMax > payload.budgets[rowIndex]) {
-        throw new Error('Должно выполняться условие: для каждой ГИА максимум по A не превышает b.')
-      }
-    })
-  }
-
-  const handleSolve = async () => {
-    try {
-      setLoading(true)
-      setError('')
-      setStatus('Вычисление...')
-      setToast('')
-
-      const payload = {
-        lambda: lambdaValue,
-        defuzz_method: defuzzMethod,
-        c_fuzzy: cFuzzy.map((row) => row.map((value) => parseNumber(value))),
-        d_fuzzy: dFuzzy.map((row) => row.map((value) => parseNumber(value))),
-        cost_matrix: costs.map((row) => row.map((value) => parseNumber(value))),
-        budgets: budgets.map((value) => parseNumber(value)),
-      }
-
-      validateClientData(payload)
-
-      const response = await fetch('/api/solve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      const data = await response.json()
-      if (!response.ok) {
-        const message = data.error || 'Сервер не смог решить задачу.'
-        showToast(message)
-        throw new Error(message)
-      }
-
-      setResult(data)
-      setStatus('Расчёт завершён.')
-    } catch (solveError) {
-      showToast(solveError.message)
-      setError(solveError.message)
-      setStatus('Ошибка расчёта.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   return (
-    <div className="app-screen">
+    <div className="app-screen" data-theme={theme}>
       {toast ? <div className="toast">{toast}</div> : null}
 
       <section className="panel config-panel">
         <div className="controls-row">
-          <label className="field">
+          <label className="field field--fill">
             <span>m (ГИА)</span>
             <input
               type="number"
@@ -465,16 +423,11 @@ function App() {
               value={assetsInput}
               onChange={(event) => setAssetsInput(event.target.value)}
               onBlur={(event) => applyDimensionValue('m', event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  applyDimensionValue('m', event.currentTarget.value)
-                  event.currentTarget.blur()
-                }
-              }}
+              onKeyDown={(event) => event.key === 'Enter' && (applyDimensionValue('m', event.currentTarget.value), event.currentTarget.blur())}
             />
           </label>
 
-          <label className="field">
+          <label className="field field--fill">
             <span>n (СЗИ)</span>
             <input
               type="number"
@@ -482,21 +435,16 @@ function App() {
               value={protectionsInput}
               onChange={(event) => setProtectionsInput(event.target.value)}
               onBlur={(event) => applyDimensionValue('n', event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  applyDimensionValue('n', event.currentTarget.value)
-                  event.currentTarget.blur()
-                }
-              }}
+              onKeyDown={(event) => event.key === 'Enter' && (applyDimensionValue('n', event.currentTarget.value), event.currentTarget.blur())}
             />
           </label>
 
-          <label className="field field--wide">
-            <span>Метод дефаззификации</span>
+          <label className="field field--wide field--fill">
+            <span>{t.method}</span>
             <select value={defuzzMethod} onChange={(event) => setDefuzzMethod(event.target.value)}>
               {defuzzOptions.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {option.label}
+                  {DEFUZZ_LABELS[language][option.value] ?? option.label}
                 </option>
               ))}
             </select>
@@ -504,21 +452,45 @@ function App() {
 
           <div className="field field--lambda">
             <span>λ = {lambdaValue.toFixed(2)}</span>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={lambdaValue}
-              onChange={(event) => setLambdaValue(Number(event.target.value))}
-            />
+            <div className="lambda-inputs">
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={lambdaValue}
+                onChange={(event) => {
+                  const value = Number(event.target.value)
+                  setLambdaValue(value)
+                  setLambdaInput(String(value))
+                }}
+              />
+              <input
+                type="number"
+                min="0"
+                max="1"
+                step="0.01"
+                value={lambdaInput}
+                onChange={(event) => setLambdaInput(event.target.value)}
+                onBlur={(event) => applyLambdaValue(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    applyLambdaValue(event.currentTarget.value)
+                    event.currentTarget.blur()
+                  }
+                }}
+              />
+            </div>
             <div className="preset-row">
               {LAMBDA_PRESETS.map((preset) => (
                 <button
                   key={preset}
                   type="button"
                   className={preset === lambdaValue ? 'preset preset--active' : 'preset'}
-                  onClick={() => setLambdaValue(preset)}
+                  onClick={() => {
+                    setLambdaValue(preset)
+                    setLambdaInput(String(preset))
+                  }}
                 >
                   {preset.toFixed(2)}
                 </button>
@@ -527,223 +499,155 @@ function App() {
           </div>
 
           <div className="field field--actions">
-            <button type="button" className="btn btn--secondary" onClick={handleLoadFileClick}>
-              Загрузить файл
-            </button>
-            <button type="button" className="btn btn--ghost" onClick={clearAll}>
-              Очистить
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/json,.json"
-              className="hidden-file-input"
-              onChange={handleConfigFileChange}
-            />
-            <button type="button" className="btn btn--primary" onClick={handleSolve} disabled={loading}>
-              {loading ? 'Считаю...' : 'Рассчитать'}
-            </button>
-          </div>
-        </div>
-
-        <div className="tables-row">
-          <div className="table-block">
-            <TableTitle title="c̃j" subtitle={`${triStart + 1}-${triEnd} из ${protections}`} />
-            <TriangularTable
-              rowPrefix="СЗИ"
-              start={triStart}
-              end={triEnd}
-              values={cFuzzy}
-              onChange={(rowIndex, colIndex, value) => updateTriCell(setCFuzzy, cFuzzy, rowIndex, colIndex, value)}
-            />
-          </div>
-
-          <div className="table-block">
-            <TableTitle title="d̃j" subtitle={`${triStart + 1}-${triEnd} из ${protections}`} />
-            <TriangularTable
-              rowPrefix="СЗИ"
-              start={triStart}
-              end={triEnd}
-              values={dFuzzy}
-              onChange={(rowIndex, colIndex, value) => updateTriCell(setDFuzzy, dFuzzy, rowIndex, colIndex, value)}
-            />
-          </div>
-
-          <div className="table-block table-block--wide">
-            <TableTitle
-              title="A и b"
-              subtitle={`строки ${costRowStart + 1}-${costRowEnd}/${assets}, столбцы ${costColStart + 1}-${costColEnd}/${protections}`}
-            />
-            <CostTable
-              rowStart={costRowStart}
-              rowEnd={costRowEnd}
-              colStart={costColStart}
-              colEnd={costColEnd}
-              values={costs}
-              budgets={budgets}
-              onCellChange={updateCostCell}
-              onBudgetChange={updateBudgetCell}
-            />
-          </div>
-        </div>
-
-        <div className="pagers-row">
-          <Pager
-            label="Страницы c̃j/d̃j"
-            page={triPage}
-            total={triTotalPages}
-            onPrev={() => setTriPage((page) => clampPage(page - 1, triTotalPages))}
-            onNext={() => setTriPage((page) => clampPage(page + 1, triTotalPages))}
-          />
-          <Pager
-            label="Строки матрицы A"
-            page={costRowPage}
-            total={rowTotalPages}
-            onPrev={() => setCostRowPage((page) => clampPage(page - 1, rowTotalPages))}
-            onNext={() => setCostRowPage((page) => clampPage(page + 1, rowTotalPages))}
-          />
-          <Pager
-            label="Столбцы матрицы A"
-            page={costColPage}
-            total={colTotalPages}
-            onPrev={() => setCostColPage((page) => clampPage(page - 1, colTotalPages))}
-            onNext={() => setCostColPage((page) => clampPage(page + 1, colTotalPages))}
-          />
-        </div>
-      </section>
-
-      <section className="panel result-panel">
-        <h2>Результаты</h2>
-        <div className="status-box">{status}</div>
-
-        {result ? (
-          <div className="result-solution">
-            <div><strong>x*</strong> = ({result.solution_original.join(', ')})</div>
-            <div><strong>Выбранные СЗИ:</strong> {result.selected_original_indices.length ? result.selected_original_indices.join(', ') : 'нет выбранных СЗИ'}</div>
-            <div><strong>F(x*) =</strong> {formatValue(result.objective, 6)}</div>
-          </div>
-        ) : (
-          <div className="result-empty">Ожидание расчёта.</div>
-        )}
-
-        <div className="szi-visual" ref={visualRef} style={{ '--szi-cols': gridShape.cols, '--szi-rows': gridShape.rows }}>
-          {displayedSolution.map((value, index) => (
-            <div key={index} className={value === 1 ? 'szi-tile szi-tile--selected' : 'szi-tile'} title={`СЗИ ${index + 1}: ${value === 1 ? 'выбрано' : 'не выбрано'}`}>
-              {index + 1}
+            <div className="actions-main">
+              <button type="button" className="btn btn--secondary" onClick={() => { if (fileInputRef.current) { fileInputRef.current.value = ''; fileInputRef.current.click() } }}>{t.loadFile}</button>
+              <button type="button" className="btn btn--ghost" onClick={clearAll}>{t.clear}</button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/json,.json"
+                className="hidden-file-input"
+                onChange={async (event) => {
+                  const file = event.target.files?.[0]
+                  if (!file) return
+                  try {
+                    await loadFromConfigFile(file)
+                  } catch (loadError) {
+                    showToast(loadError.message)
+                    setError(loadError.message)
+                  }
+                }}
+              />
+              <button type="button" className="btn btn--primary" onClick={handleSolve} disabled={loading}>{loading ? t.solving : t.solve}</button>
             </div>
-          ))}
+            <div className="actions-menu">
+              <button type="button" className="btn btn--ghost btn--menu" onClick={() => setIsMenuOpen((open) => !open)}>{t.menu}</button>
+              {isMenuOpen ? (
+                <div className="top-menu__dropdown">
+                  <label>
+                    <span>{t.theme}</span>
+                    <select value={theme} onChange={(event) => setTheme(event.target.value)}>
+                      <option value="dark">{t.dark}</option>
+                      <option value="red">{t.red}</option>
+                      <option value="green">{t.green}</option>
+                      <option value="gray">{t.gray}</option>
+                      <option value="ocean">{t.ocean}</option>
+                      <option value="violet">{t.violet}</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>{t.language}</span>
+                    <select value={language} onChange={(event) => setLanguage(event.target.value)}>
+                      <option value="ru">{t.russian}</option>
+                      <option value="en">{t.english}</option>
+                    </select>
+                  </label>
+                </div>
+              ) : null}
+            </div>
+          </div>
         </div>
 
+        <div className="single-sets-row">
+          <SingleTriEditor
+            title={t.cSet}
+            index={cIndex}
+            total={protections}
+            rowValues={cFuzzy[cIndex] ?? ['', '', '']}
+            onPrev={() => setCIndex((index) => Math.max(0, index - 1))}
+            onNext={() => setCIndex((index) => Math.min(protections - 1, index + 1))}
+            onChange={(colIndex, value) => updateTriCell(setCFuzzy, cFuzzy, cIndex, colIndex, value)}
+          />
+          <SingleTriEditor
+            title={t.dSet}
+            index={dIndex}
+            total={protections}
+            rowValues={dFuzzy[dIndex] ?? ['', '', '']}
+            onPrev={() => setDIndex((index) => Math.max(0, index - 1))}
+            onNext={() => setDIndex((index) => Math.min(protections - 1, index + 1))}
+            onChange={(colIndex, value) => updateTriCell(setDFuzzy, dFuzzy, dIndex, colIndex, value)}
+          />
+        </div>
+
+        <div className="table-block table-block--grow">
+          <CostTable
+            values={costs}
+            budgets={budgets}
+            onCellChange={updateCostCell}
+            onBudgetChange={updateBudgetCell}
+          />
+        </div>
+
+        <div className="status-inline">{t.status}: {status}</div>
         {error ? <div className="error-box">{error}</div> : null}
       </section>
+
+      {isResultOpen && result ? (
+        <div className="modal-backdrop" onClick={() => setIsResultOpen(false)}>
+          <div className="result-modal" onClick={(event) => event.stopPropagation()}>
+            <h2>{t.resultTitle}</h2>
+            <div><strong>x*</strong> = ({result.solution_original.join(', ')})</div>
+            <div><strong>{t.selected}</strong> {result.selected_original_indices.length ? result.selected_original_indices.join(', ') : t.noSelected}</div>
+            <div><strong>F(x*) =</strong> {formatValue(result.objective, 6)}</div>
+            <div><strong>{t.cCrisp}:</strong> {result.c_crisp_original.map((value) => formatValue(value, 6)).join(', ')}</div>
+            <div><strong>{t.dCrisp}:</strong> {result.d_crisp_original.map((value) => formatValue(value, 6)).join(', ')}</div>
+            <button type="button" className="btn btn--primary" onClick={() => setIsResultOpen(false)}>{t.close}</button>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
 
-function TableTitle({ title, subtitle }) {
+function SingleTriEditor({ title, index, total, rowValues, onPrev, onNext, onChange }) {
   return (
-    <div className="table-title">
-      <strong>{title}</strong>
-      <span>{subtitle}</span>
-    </div>
-  )
-}
-
-function TriangularTable({ rowPrefix, start, end, values, onChange }) {
-  return (
-    <table className="matrix-table">
-      <thead>
-        <tr>
-          <th>{rowPrefix}</th>
-          <th>a</th>
-          <th>b</th>
-          <th>c</th>
-        </tr>
-      </thead>
-      <tbody>
-        {Array.from({ length: end - start }, (_, offset) => {
-          const rowIndex = start + offset
-          return (
-            <tr key={rowIndex}>
-              <th>{rowPrefix} {rowIndex + 1}</th>
-              {[0, 1, 2].map((col) => (
-                <td key={col}>
-                  <input
-                    type="number"
-                    step="0.001"
-                    value={values[rowIndex]?.[col] ?? ''}
-                    onChange={(event) => onChange(rowIndex, col, event.target.value)}
-                  />
-                </td>
-              ))}
-            </tr>
-          )
-        })}
-      </tbody>
-    </table>
-  )
-}
-
-function CostTable({ rowStart, rowEnd, colStart, colEnd, values, budgets, onCellChange, onBudgetChange }) {
-  const columnIndices = Array.from({ length: colEnd - colStart }, (_, offset) => colStart + offset)
-
-  return (
-    <table className="matrix-table">
-      <thead>
-        <tr>
-          <th>ГИА</th>
-          {columnIndices.map((colIndex) => (
-            <th key={colIndex}>СЗИ {colIndex + 1}</th>
-          ))}
-          <th>b</th>
-        </tr>
-      </thead>
-      <tbody>
-        {Array.from({ length: rowEnd - rowStart }, (_, offset) => {
-          const rowIndex = rowStart + offset
-          return (
-            <tr key={rowIndex}>
-              <th>ГИА {rowIndex + 1}</th>
-              {columnIndices.map((colIndex) => (
-                <td key={`${rowIndex}-${colIndex}`}>
-                  <input
-                    type="number"
-                    step="0.001"
-                    value={values[rowIndex]?.[colIndex] ?? ''}
-                    onChange={(event) => onCellChange(rowIndex, colIndex, event.target.value)}
-                  />
-                </td>
-              ))}
-              <td>
-                <input
-                  type="number"
-                  step="0.001"
-                  value={budgets[rowIndex] ?? ''}
-                  onChange={(event) => onBudgetChange(rowIndex, event.target.value)}
-                />
-              </td>
-            </tr>
-          )
-        })}
-      </tbody>
-    </table>
-  )
-}
-
-function Pager({ label, page, total, onPrev, onNext }) {
-  return (
-    <div className="pager">
-      <span>{label}</span>
-      <div className="pager-controls">
-        <button type="button" onClick={onPrev} disabled={page <= 0}>
-          ←
-        </button>
-        <strong>{page + 1}/{total}</strong>
-        <button type="button" onClick={onNext} disabled={page >= total - 1}>
-          →
-        </button>
+    <div className="single-set-card">
+      <div className="single-set-head">
+        <strong>{title} {index + 1}/{total}</strong>
+        <div className="pager-controls">
+          <button type="button" onClick={onPrev} disabled={index <= 0}>←</button>
+          <button type="button" onClick={onNext} disabled={index >= total - 1}>→</button>
+        </div>
+      </div>
+      <div className="single-set-fields">
+        {['a', 'b', 'c'].map((label, colIndex) => (
+          <label key={label}>
+            <span>{label}</span>
+            <input type="number" step="0.001" value={rowValues[colIndex] ?? ''} onChange={(event) => onChange(colIndex, event.target.value)} />
+          </label>
+        ))}
       </div>
     </div>
+  )
+}
+
+function CostTable({ values, budgets, onCellChange, onBudgetChange }) {
+  const columns = values[0]?.length ?? 0
+  return (
+    <table className="matrix-table matrix-table--full" style={{ '--matrix-rows': values.length }}>
+      <thead>
+        <tr>
+          <th>ГИА / СЗИ</th>
+          {Array.from({ length: columns }, (_, col) => <th key={col}>СЗИ {col + 1}</th>)}
+          <th className="budget-col">b (лимит)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {values.map((row, rowIndex) => (
+          <tr key={rowIndex}>
+            <th>ГИА {rowIndex + 1}</th>
+            {row.map((cell, colIndex) => (
+              <td key={`${rowIndex}-${colIndex}`}>
+                <input type="number" step="0.001" value={cell ?? ''} onChange={(event) => onCellChange(rowIndex, colIndex, event.target.value)} />
+              </td>
+            ))}
+            <td className="budget-col">
+              <input type="number" step="0.001" value={budgets[rowIndex] ?? ''} onChange={(event) => onBudgetChange(rowIndex, event.target.value)} />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   )
 }
 
