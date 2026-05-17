@@ -5,7 +5,7 @@ from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
 
-from backend.solver import DEFUZZ_METHODS, SolverError, solve_problem
+from backend.solver import SolverError, solve_problem
 
 
 DIST_DIR = Path(__file__).resolve().parent / "dist"
@@ -14,13 +14,7 @@ app = Flask(__name__, static_folder=str(DIST_DIR), static_url_path="")
 
 @app.get("/api/meta")
 def api_meta():
-    return jsonify(
-        {
-            "defuzz_methods": [
-                {"value": key, "label": value} for key, value in DEFUZZ_METHODS.items()
-            ]
-        }
-    )
+    return jsonify({"solver": "lab_3_enemy_firepower", "variants": ["task1", "task2"]})
 
 
 @app.post("/api/solve")
